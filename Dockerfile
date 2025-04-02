@@ -131,14 +131,14 @@ AA_Az_Accounts_MinimumVersion=${Az_Accounts_MinimumVersion} `
 AA_Az_Accounts_MaximumVersion=${Az_Accounts_MaximumVersion} `
 AA_Stages=${Stages}
 
-# Copy the PowerShell script to the container
-COPY --link ./New-KEYTOSACMEAgentInstance.ps1 /New-KEYTOSACMEAgentInstance.ps1
-
 # Set the working directory
 WORKDIR /
 
+# Copy the PowerShell script to the container
+COPY --link ./New-KEYTOSACMEAgentInstance.ps1 ./New-KEYTOSACMEAgentInstance.ps1
+
 # Set the default shell to Windows PowerShell
-SHELL ["powershell", "-Command"]
+SHELL ["C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", "-Command"]
 
 # Build the container image by running the PowerShell script
 # and passing the build-time arguments via environment variables as arguments to the script.
@@ -221,7 +221,7 @@ New-KEYTOSACMEAgentInstance `
 # Perform a health check to ensure the container is running correctly
 # when the ServiceMonitor process is running. The health check will run every 30 seconds
 HEALTHCHECK --start-period=60s --interval=30s --timeout=3s `
-    CMD powershell -Command "` 
+    CMD C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -Command "` 
 if (Get-Process -Name 'ServiceMonitor' -ErrorAction SilentlyContinue) { `
     try { `
         Invoke-WebRequest   -Uri 'https://$Env:AA_CertificateSubjectName/api/Health/Overall' `
