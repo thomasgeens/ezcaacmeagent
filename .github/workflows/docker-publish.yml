@@ -1,0 +1,185 @@
+name: Docker
+
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+on:
+  push:
+    branches: ["main"]
+    # Publish semver tags as releases.
+    tags: ["v*.*.*"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      build_version:
+        description: "Version of the build (e.g., v1.0.0)"
+        required: true
+        default: "v1.0.0"
+      vcs_ref:
+        description: "Source control revision identifier"
+        required: false
+      add_latest_tag:
+        description: 'Add the "latest" tag to the image'
+        type: boolean
+        required: false
+        default: false
+      registry:
+        description: "Override the Docker registry (default: ghcr.io)"
+        type: choice
+        required: false
+        default: "ghcr.io"
+        options:
+          - ghcr.io
+          - docker.io
+          - quay.io
+
+env:
+  REGISTRY: ${{ github.event.inputs.registry || 'ghcr.io' }}
+  IMAGE_NAME: ${{ github.repository }}
+  BUILD_VERSION: ${{ github.event.inputs.build_version || github.ref_name }}
+  VCS_REF: ${{ github.event.inputs.vcs_ref || github.sha }}
+  ADD_LATEST: ${{ github.event.inputs.add_latest_tag || github.ref == 'refs/heads/main' }}
+
+jobs:
+  build:
+    name: Build and publish the Docker image
+    runs-on: windows-2025
+    permissions:
+      contents: read
+      packages: write
+      # This is used to complete the identity challenge
+      # with sigstore/fulcio when running outside of PRs.
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Install the cosign tool except on PR
+      # https://github.com/sigstore/cosign-installer
+      - name: Install cosign
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@v3.5.0
+        with:
+          cosign-release: "v2.2.4"
+
+      # Login against a Docker registry except on PR
+      # https://github.com/docker/login-action
+      - name: Log into Docker registry ${{ env.REGISTRY }}
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Extract metadata (tags, labels) for Docker
+      # https://github.com/docker/metadata-action
+      - name: Extract Docker metadata from Dockerfile
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+            type=raw,value=latest,enable=${{ env.ADD_LATEST }}
+            type=raw,value=${{ env.BUILD_VERSION }},enable=${{ github.event_name == 'workflow_dispatch' }}
+          sep-labels: ","
+          sep-tags: ","
+
+      # Translate extracted Docker metadata labels to a comma-separated string array using PowerShell
+      - name: Convert extracted Docker metadata labels to a comma-separated string array
+        id: convert-labels
+        shell: pwsh
+        run: |
+          $labelsStringArray = (('${{ steps.meta.outputs.labels }}').split(",")).ForEach({
+            $key, $value = $_ -split "=", 2
+            $key = $key.Trim()
+            $value = $value.Trim()
+            "$key=""$value"""
+          }) -join ','
+          Write-Host "LABELS:`n$labelsStringArray" 
+          "LABELS=$labelsStringArray" | Out-File -FilePath $Env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      # Strip the extracted Docker metadata tags from the imagename into a comma-separated string array using PowerShell
+      - name: Strip extracted Docker metadata tags from the imagename
+        id: strip-tags
+        shell: pwsh
+        run: |
+          $tagsStringArray = (('${{ steps.meta.outputs.tags }}').split(",")).ForEach({
+            $tag = ($_ -split ":", 2)[1]
+            $tag = $tag.Trim()
+            $tag
+          }) -join ','
+          Write-Host "TAGS:`n$tagsStringArray" 
+          "TAGS=$tagsStringArray" | Out-File -FilePath $Env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      # Build and push Docker image without BuildKit (don't push on PR)
+      # Using a simple Docker build and push action
+      - name: Build and push Docker image
+        if: ${{ github.event_name != 'pull_request' }}
+        id: build-and-push
+        uses: mr-smithers-excellent/docker-build-push@v6
+        with:
+          image: ${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.title'] }}
+          tags: ${{ steps.strip-tags.outputs.tags }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          labels: ${{ steps.convert-labels.outputs.labels }}
+
+      # Retrieve the Docker image digest using PowerShell
+      - name: Extract Docker image repo digests per tag
+        if: ${{ github.event_name != 'pull_request' }}
+        id: extract-digest
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        shell: pwsh
+        run: |
+          $imageName = "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          $digests = @()
+          ($Env:TAGS -split ",") | ForEach-Object {
+            $tag = $_.Trim()
+            Write-Host "Extracting Docker image repo digests for tag '${tag}''..."
+            $repoDigests = docker image inspect --format='{{ join .RepoDigests "," }}' "$tag"
+            Write-Host "Repo digests for tag '${tag}'':`n$repoDigests"
+            $digests += $repoDigests
+          }
+          if ($digests.Count -gt 0) {  
+            $digestsStringArray = $digests -join ','
+            "DIGESTS=$digestsStringArray" | Out-File -FilePath $Env:GITHUB_OUTPUT -Encoding utf8 -Append
+          } else {
+            Write-Error "Failed to extract the repo digests for Docker image '$imageName'"
+            exit 1
+          }
+
+      # Sign the resulting Docker image repo digests except on PRs.
+      # This will only write to the public Rekor transparency log when the Docker
+      # repository is public to avoid leaking data.  If you would like to publish
+      # transparency data even for private images, pass --force to cosign below.
+      # https://github.com/sigstore/cosign
+      - name: Sign published Docker image using cosign
+        id: cosign
+        if: ${{ github.event_name != 'pull_request' }}
+        env:
+          # https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-an-intermediate-environment-variable
+          DIGESTS: ${{ steps.extract-digest.outputs.digests }}
+        # This step uses the identity token to provision an ephemeral certificate
+        # against the sigstore community Fulcio instance.
+        shell: pwsh
+        run: |
+          $imageName = "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          Write-Host "Starting signing for all repo digests for Docker image '$imageName':"
+          ($Env:DIGESTS -split ",") | ForEach-Object {
+            $digest = $_.Trim()
+            Write-Host "Signing repo digest '$digest'..."
+            cosign sign --yes $digest
+            Write-Host "Successfully signed repo digest '$digest'"
+          }
