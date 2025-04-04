@@ -86,7 +86,7 @@ jobs:
           # # A comma separated string of rules to ignore
           # ignore: # optional
           # A comma separated list of trusted registry urls
-          trusted-registries: ghcr.io # optional            
+          trusted-registries: mcr.microsoft.com # optional            
 
   build:
     name: Build and publish the Docker image
