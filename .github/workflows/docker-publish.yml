@@ -55,33 +55,33 @@ jobs:
         uses: hadolint/hadolint-action@v3.1.0
         with:
           # The path to the Dockerfile to lint
-          dockerfile: # optional, default is Dockerfile
-          # Path to a config file
-          config: # optional
-          # Search for specified dockerfile recursively, from the project root
-          recursive: # optional, default is false
-          # The path where to save the linting results to
-          output-file: # optional, default is /dev/stdout
-          # Don't create colored output.
-          no-color: # optional, default is false
-          # Never exit with a failure status code
-          no-fail: # optional, default is false
-          # Print more information about the running config
-          verbose: # optional, default is false
-          # The output format, one of [tty (default) | json | checkstyle | codeclimate | gitlab_codeclimate | codacy | sarif]
-          format: # optional, default is tty
-          # Fail the pipeline only if rules with severity above this threshold are violated. One of [error | warning | info (default) | style | ignore]
-          failure-threshold: # optional, default is info
-          # A comma separated list of rules whose severity will be `error`
-          override-error: # optional
-          # A comma separated list of rules whose severity will be `warning`
-          override-warning: # optional
-          # A comma separated list of rules whose severity will be `info`
-          override-info: # optional
-          # A comma separated list of rules whose severity will be `style`
-          override-style: # optional
-          # A comma separated string of rules to ignore
-          ignore: # optional
+          # dockerfile: # optional, default is Dockerfile
+          # # Path to a config file
+          # config: # optional
+          # # Search for specified dockerfile recursively, from the project root
+          # recursive: # optional, default is false
+          # # The path where to save the linting results to
+          # output-file: # optional, default is /dev/stdout
+          # # Don't create colored output.
+          # no-color: # optional, default is false
+          # # Never exit with a failure status code
+          # no-fail: # optional, default is false
+          # # Print more information about the running config
+          # verbose: # optional, default is false
+          # # The output format, one of [tty (default) | json | checkstyle | codeclimate | gitlab_codeclimate | codacy | sarif]
+          # format: # optional, default is tty
+          # # Fail the pipeline only if rules with severity above this threshold are violated. One of [error | warning | info (default) | style | ignore]
+          # failure-threshold: # optional, default is info
+          # # A comma separated list of rules whose severity will be `error`
+          # override-error: # optional
+          # # A comma separated list of rules whose severity will be `warning`
+          # override-warning: # optional
+          # # A comma separated list of rules whose severity will be `info`
+          # override-info: # optional
+          # # A comma separated list of rules whose severity will be `style`
+          # override-style: # optional
+          # # A comma separated string of rules to ignore
+          # ignore: # optional
           # A comma separated list of trusted registry urls
           trusted-registries: ghcr.io # optional            
 
