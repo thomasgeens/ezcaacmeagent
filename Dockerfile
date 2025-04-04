@@ -51,7 +51,6 @@ LABEL org.label-schema.release-date=${BUILD_DATE}
 # org.opencontainers.image.authors contact details of the people or organization responsible for the image (freeform string)
 LABEL org.opencontainers.image.authors="Thomas Geens <thomas@geens.be>"
 LABEL org.label-schema.maintainer="Thomas Geens <thomas@geens.be>"
-MAINTAINER Thomas Geens <thomas@geens.be>
 # org.opencontainers.image.url URL to find more information on the image (string)
 LABEL org.opencontainers.image.url="https://www.keytos.io/docs/azure-pki/how-to-enable-acme-for-private-pki/"
 # org.opencontainers.image.documentation URL to get documentation on the image (string)
