@@ -9,16 +9,16 @@ on:
   push:
     branches: ["main"]
     # Publish semver tags as releases.
-    tags: ["v*.*.*"]
+    # tags: ["v*.*.*"]
   pull_request:
     branches: ["main"]
-    types: [opened, synchronize, reopened, edited, ready_for_review, unlabeled, labeled]
+    types: [opened, synchronize, reopened, edited, ready_for_review, unlabeled, labeled, closed]
   workflow_dispatch:
     inputs:
       build_version:
-        description: "Version of the build (e.g., v1.0.0)"
+        description: "Version of the build (e.g., 1.0.0)"
         required: true
-        default: "v1.0.0"
+        default: "0.1.0"
       vcs_ref:
         description: "Source control revision identifier"
         required: false
@@ -36,12 +36,17 @@ on:
           - ghcr.io
           - docker.io
           - quay.io
+      create_release:
+        description: "Create a release for the image"
+        type: boolean
+        required: false
+        default: false
     
 
 env:
   REGISTRY: ${{ github.event.inputs.registry || 'ghcr.io' }}
   IMAGE_NAME: ${{ github.repository }}
-  BUILD_VERSION: ${{ github.event.inputs.build_version || github.ref_name }}
+  BUILD_VERSION: ${{ format('v{0}', github.event.inputs.build_version) || github.ref_name }}
   VCS_REF: ${{ github.event.inputs.vcs_ref || github.sha }}
   ADD_LATEST: ${{ github.event.inputs.add_latest_tag || github.ref == 'refs/heads/main' }}
 
@@ -49,7 +54,7 @@ jobs:
   code-quality:
     name: Code quality checks
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: (github.event_name == 'pull_request' && github.event.action != 'closed') || github.event_name == 'workflow_dispatch'
     
     steps:
       - name: Checkout repository
@@ -94,7 +99,7 @@ jobs:
   build:
     name: Build and publish the Docker image to Github container registry
     environment: production
-    if: github.event.pull_request.draft != true
+    if: github.event.pull_request.draft != true && !(github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged != true)
     runs-on: windows-2025
     permissions:
       contents: read
@@ -106,6 +111,22 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Conventional commits semver release
+        if: (github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true) || github.event.inputs.create_release == 'true'
+        id: semver-release
+        env: 
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # You may pin to the exact commit or the version.
+        # uses: grumpy-programmer/conventional-commits-semver-release@17e2ceede3b7c269a82b690d9ff9a1a691e648d2
+        uses: grumpy-programmer/conventional-commits-semver-release@v1
+        with:
+          # The init version of project default: 0.1.0
+          init-version: ${{ github.event.inputs.build_version || '' }} # optional, default is 0.1.0
+          # The prefix of version tag, default: v
+          # tag-prefix: # optional, default is v
+          # Assets files added to release, accept multiple paths, example: path/to/file.txt path/to/*.txt path/**/*.txt
+          assets: New-KEYTOSACMEAgentInstance.ps1, Dockerfile, LICENSE # optional, default is empty
 
       # Extract metadata (tags, labels) for Docker
       # https://github.com/docker/metadata-action
@@ -122,6 +143,7 @@ jobs:
             type=sha
             type=raw,value=latest,enable=${{ env.ADD_LATEST }}
             type=raw,value=${{ env.BUILD_VERSION }},enable=${{ github.event_name == 'workflow_dispatch' }}
+            type=raw,value=${{ steps.semver-release.outputs.version }},enable=${{ (github.event_name == 'push' && github.event.pull_request.merged == true && github.ref == 'refs/heads/main') || github.event.inputs.create_release == 'true' }}
           sep-labels: ","
           sep-tags: ","
 
