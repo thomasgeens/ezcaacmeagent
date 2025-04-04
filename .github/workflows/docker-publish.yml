@@ -143,7 +143,7 @@ jobs:
             type=sha
             type=raw,value=latest,enable=${{ env.ADD_LATEST }}
             type=raw,value=${{ env.BUILD_VERSION }},enable=${{ github.event_name == 'workflow_dispatch' }}
-            type=raw,value=${{ steps.semver-release.outputs.version }},enable=(${{ github.event_name == 'push' && github.event.pull_request.merged == true && github.ref == 'refs/heads/main' }} || ${{ github.event.inputs.create_release == 'true' }})
+            type=raw,value=${{ steps.semver-release.outputs.version }},enable=${{ (github.event_name == 'push' && github.event.pull_request.merged == true && github.ref == 'refs/heads/main') || github.event.inputs.create_release == 'true' }}
           sep-labels: ","
           sep-tags: ","
 
