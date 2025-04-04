@@ -90,7 +90,8 @@ jobs:
           trusted-registries: mcr.microsoft.com # optional            
 
   build:
-    name: Build and publish the Docker image
+    name: Build and publish the Docker image to Github container registry
+    environment: production
     runs-on: windows-2025
     permissions:
       contents: read
