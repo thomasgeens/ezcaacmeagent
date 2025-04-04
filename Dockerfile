@@ -181,6 +181,8 @@ New-KEYTOSACMEAgentInstance `
 
 # Set the entry point to run the PowerShell script when the container starts
 # and pass the environment variables as arguments to the script.
+# hadolint The ENTRYPOINT instruction is used to set a SINGLE command that will be run when the container starts, and so we avoid escaping issues.)
+# hadolint ignore=DL3025
 ENTRYPOINT "`
 $ErrorActionPreference = 'Stop'; `
 $ProgressPreference = 'SilentlyContinue'; `
