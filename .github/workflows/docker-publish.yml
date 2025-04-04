@@ -12,6 +12,7 @@ on:
     tags: ["v*.*.*"]
   pull_request:
     branches: ["main"]
+    types: [opened, synchronize, reopened, edited, ready_for_review, unlabeled, labeled]
   workflow_dispatch:
     inputs:
       build_version:
@@ -35,6 +36,7 @@ on:
           - ghcr.io
           - docker.io
           - quay.io
+    
 
 env:
   REGISTRY: ${{ github.event.inputs.registry || 'ghcr.io' }}
@@ -90,7 +92,9 @@ jobs:
           trusted-registries: mcr.microsoft.com # optional            
 
   build:
-    name: Build and publish the Docker image
+    name: Build and publish the Docker image to Github container registry
+    environment: production
+    if: github.event.pull_request.draft != true
     runs-on: windows-2025
     permissions:
       contents: read
@@ -102,24 +106,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      # Install the cosign tool except on PR
-      # https://github.com/sigstore/cosign-installer
-      - name: Install cosign
-        if: github.event_name != 'pull_request'
-        uses: sigstore/cosign-installer@v3.5.0
-        with:
-          cosign-release: "v2.2.4"
-
-      # Login against a Docker registry except on PR
-      # https://github.com/docker/login-action
-      - name: Log into Docker registry ${{ env.REGISTRY }}
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
 
       # Extract metadata (tags, labels) for Docker
       # https://github.com/docker/metadata-action
@@ -166,10 +152,18 @@ jobs:
           Write-Host "TAGS:`n$tagsStringArray" 
           "TAGS=$tagsStringArray" | Out-File -FilePath $Env:GITHUB_OUTPUT -Encoding utf8 -Append
 
+      # Login against a Docker registry except on PR
+      # https://github.com/docker/login-action
+      - name: Log into Github container registry ${{ env.REGISTRY }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       # Build and push Docker image without BuildKit (don't push on PR)
       # Using a simple Docker build and push action
       - name: Build and push Docker image
-        if: ${{ github.event_name != 'pull_request' }}
         id: build-and-push
         uses: mr-smithers-excellent/docker-build-push@v6
         with:
@@ -182,7 +176,6 @@ jobs:
 
       # Retrieve the Docker image digest using PowerShell
       - name: Extract Docker image repo digests per tag
-        if: ${{ github.event_name != 'pull_request' }}
         id: extract-digest
         env:
           TAGS: ${{ steps.meta.outputs.tags }}
@@ -205,6 +198,14 @@ jobs:
             exit 1
           }
 
+      # Install the cosign tool except on PR
+      # https://github.com/sigstore/cosign-installer
+      - name: Install cosign
+        id: install-cosign
+        uses: sigstore/cosign-installer@v3.5.0
+        with:
+          cosign-release: "v2.2.4"
+
       # Sign the resulting Docker image repo digests except on PRs.
       # This will only write to the public Rekor transparency log when the Docker
       # repository is public to avoid leaking data.  If you would like to publish
@@ -212,7 +213,6 @@ jobs:
       # https://github.com/sigstore/cosign
       - name: Sign published Docker image using cosign
         id: cosign
-        if: ${{ github.event_name != 'pull_request' }}
         env:
           # https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-an-intermediate-environment-variable
           DIGESTS: ${{ steps.extract-digest.outputs.digests }}
