@@ -12,6 +12,7 @@ on:
     tags: ["v*.*.*"]
   pull_request:
     branches: ["main"]
+    types: [opened, synchronize, reopened, edited, ready_for_review, unlabeled, labeled]
   workflow_dispatch:
     inputs:
       build_version:
