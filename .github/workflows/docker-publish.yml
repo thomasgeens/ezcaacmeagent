@@ -46,7 +46,7 @@ env:
 jobs:
   code-quality:
     name: Code quality checks
-    runs-on: windows-2025
+    runs-on: ubuntu-latest
     
     steps:
       - name: Hadolint Action
