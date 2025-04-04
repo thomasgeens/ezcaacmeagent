@@ -47,6 +47,7 @@ jobs:
   code-quality:
     name: Code quality checks
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
     
     steps:
       - name: Checkout repository
