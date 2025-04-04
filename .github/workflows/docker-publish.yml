@@ -55,7 +55,7 @@ jobs:
         uses: hadolint/hadolint-action@v3.1.0
         with:
           # The path to the Dockerfile to lint
-          dockerfile: Dockerfile # optional, default is Dockerfile
+          dockerfile: ./Dockerfile # optional, default is Dockerfile
           # # Path to a config file
           # config: # optional
           # # Search for specified dockerfile recursively, from the project root
