@@ -100,7 +100,7 @@ jobs:
     name: Build and publish the Docker image to Github container registry
     environment: production
     if: github.event.pull_request.draft != true
-    runs-on: windows-2025
+    runs-on: windows-2022
     permissions:
       contents: write
       packages: write

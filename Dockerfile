@@ -1,10 +1,10 @@
 # escape=`
 
-# Dockerfile for KEYTOS EZCA ACME Agent on Windows Server Core 2025
-# This Dockerfile builds a container image for the KEYTOS EZCA ACME Agent on Windows Server Core 2025.
+# Dockerfile for KEYTOS EZCA ACME Agent on Windows Server Core 2022 LTSC
+# This Dockerfile builds a container image for the KEYTOS EZCA ACME Agent on Windows Server Core 2022 LTSC.
 # It installs the necessary dependencies, downloads the EZCA ACME Agent, and sets up the environment for running the agent.
-# The container image is based on the Windows Server Core 2025 LTSC image with .NET Framework 4.8 and ASP.NET Core Hosting Bundle installed.
-# Base image: mcr.microsoft.com/dotnet/framework/aspnet:4.8.1-20250211-windowsservercore-ltsc2025
+# The container image is based on the Windows Server Core 2022 LTSC image with .NET Framework 4.8 and ASP.NET Core Hosting Bundle installed.
+# Base image: mcr.microsoft.com/dotnet/framework/aspnet:4.8.1-20250114-windowsservercore-ltsc2022
 FROM mcr.microsoft.com/dotnet/framework/aspnet@sha256:3e3746642401c155effabe3b156ef21d166a3ae9046bf584e337e60f49b51a68
 LABEL maintainer="Thomas Geens <thomas@geens.be>"
 
@@ -73,17 +73,17 @@ LABEL org.opencontainers.image.vendor="KEYTOS"
 # org.label-schema.name Name of the image (string)
 LABEL org.label-schema.name="thomasgeens/ezcaacmeagent"
 # org.opencontainers.image.title Human-readable title of the image (string)
-LABEL org.opencontainers.image.title="KEYTOS EZCA ACME Agent on Windows Server Core 2025"
-LABEL org.label-schema.description="KEYTOS EZCA ACME Agent on Windows Server Core 2025"
+LABEL org.opencontainers.image.title="KEYTOS EZCA ACME Agent on Windows Server Core 2022 LTSC"
+LABEL org.label-schema.description="KEYTOS EZCA ACME Agent on Windows Server Core 2022 LTSC"
 # org.opencontainers.image.description Human-readable description of the software packaged in the image (string)
-LABEL org.opencontainers.image.description="KEYTOS EZCA ACME Agent on Windows Server Core 2025"
+LABEL org.opencontainers.image.description="KEYTOS EZCA ACME Agent on Windows Server Core 2022 LTSC"
 # org.opencontainers.image.base.digest Digest of the image this image is based on (string)
 # This SHOULD be the immediate image sharing zero-indexed layers with the image, such as from a Dockerfile FROM statement.
 # This SHOULD NOT reference any other images used to generate the contents of the image (e.g., multi-stage Dockerfile builds).
 LABEL org.opencontainers.image.base.digest="sha256:3e3746642401c155effabe3b156ef21d166a3ae9046bf584e337e60f49b51a68"
 # org.opencontainers.image.base.name Image reference of the image this image is based on (string)
-LABEL org.opencontainers.image.base.name="mcr.microsoft.com/dotnet/framework/aspnet:4.8.1-20250211-windowsservercore-ltsc2025"
-LABEL org.label-schema.os="Windows Server Core 2025 LTSC"
+LABEL org.opencontainers.image.base.name="mcr.microsoft.com/dotnet/framework/aspnet:4.8.1-20250114-windowsservercore-ltsc2022"
+LABEL org.label-schema.os="Windows Server Core 2022 LTSC"
 # [System.Environment]::OSVersion.Version
 LABEL org.label-schema.os-version="10.0.26100.0"
 LABEL org.label-schema.package="PowerShell"
