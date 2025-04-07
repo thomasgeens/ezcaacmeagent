@@ -1,11 +1,11 @@
 # escape=`
 
-# Dockerfile for KEYTOS EZCA ACME Agent on Windows Server Core 2025
-# This Dockerfile builds a container image for the KEYTOS EZCA ACME Agent on Windows Server Core 2025.
+# Dockerfile for KEYTOS EZCA ACME Agent on Windows Server Core 2022 LTSC
+# This Dockerfile builds a container image for the KEYTOS EZCA ACME Agent on Windows Server Core 2022 LTSC.
 # It installs the necessary dependencies, downloads the EZCA ACME Agent, and sets up the environment for running the agent.
-# The container image is based on the Windows Server Core 2025 LTSC image with .NET Framework 4.8 and ASP.NET Core Hosting Bundle installed.
-# Base image: mcr.microsoft.com/dotnet/framework/aspnet:4.8.1-20250211-windowsservercore-ltsc2025
-FROM mcr.microsoft.com/dotnet/framework/aspnet@sha256:3e3746642401c155effabe3b156ef21d166a3ae9046bf584e337e60f49b51a68
+# The container image is based on the Windows Server Core 2022 LTSC image with .NET Framework 4.8 and ASP.NET Core Hosting Bundle installed.
+# Base image: mcr.microsoft.com/dotnet/framework/aspnet:4.8.1-20250114-windowsservercore-ltsc2022
+FROM mcr.microsoft.com/dotnet/framework/aspnet@sha256:9e0c3d8e8a0b8163900a9bfb4d67c30795071f401442c3e422c461fedf5c80f1
 LABEL maintainer="Thomas Geens <thomas@geens.be>"
 
 # Build-time arguments
@@ -14,7 +14,7 @@ ARG BUILD_VERSION # Version of the packaged software.
 ARG VCS_REF # Source control revision identifier for the packaged software.
 ARG Verbose="true" # Switch to enable or disable verbose logging. Default is `$true`.
 ARG Debug="false" # Switch to enable or disable debug logging. Default is `$false`.
-ARG TenantId="8dbee730-91af-4ab0-9fb6-085d4a3630c1" # The tenant ID of the Azure AD tenant. Can be in the form of `tenant.onmicrosoft.com` or the GUID.
+ARG TenantId="" # The tenant ID of the Azure AD tenant. Can be in the form of `tenant.onmicrosoft.com` or the GUID.
 ARG CAFriendlyName="" # The friendly name of the Issuing Intermediate SSL CA to be selected from the Issuing CA list. If omitted, the first CA in the list will be selected.
 ARG CertificateSubjectName # The subject name for the authentication certificate that will be used to authenticate with EZCA.
 ARG AuthenticationType="Identity" # The authentication type to be used. Can be one of the following `Identity`, `UseDeviceCode` or `Interactive`. Default is `Identity`.
@@ -73,22 +73,22 @@ LABEL org.opencontainers.image.vendor="KEYTOS"
 # org.label-schema.name Name of the image (string)
 LABEL org.label-schema.name="thomasgeens/ezcaacmeagent"
 # org.opencontainers.image.title Human-readable title of the image (string)
-LABEL org.opencontainers.image.title="KEYTOS EZCA ACME Agent on Windows Server Core 2025"
-LABEL org.label-schema.description="KEYTOS EZCA ACME Agent on Windows Server Core 2025"
+LABEL org.opencontainers.image.title="KEYTOS EZCA ACME Agent on Windows Server Core 2022 LTSC"
+LABEL org.label-schema.description="KEYTOS EZCA ACME Agent on Windows Server Core 2022 LTSC"
 # org.opencontainers.image.description Human-readable description of the software packaged in the image (string)
-LABEL org.opencontainers.image.description="KEYTOS EZCA ACME Agent on Windows Server Core 2025"
+LABEL org.opencontainers.image.description="KEYTOS EZCA ACME Agent on Windows Server Core 2022 LTSC"
 # org.opencontainers.image.base.digest Digest of the image this image is based on (string)
 # This SHOULD be the immediate image sharing zero-indexed layers with the image, such as from a Dockerfile FROM statement.
 # This SHOULD NOT reference any other images used to generate the contents of the image (e.g., multi-stage Dockerfile builds).
-LABEL org.opencontainers.image.base.digest="sha256:3e3746642401c155effabe3b156ef21d166a3ae9046bf584e337e60f49b51a68"
+LABEL org.opencontainers.image.base.digest="sha256:ade9d7aa2a163c16c2d33d808208253166e91e801a4765fca125bc8d60ae3894"
 # org.opencontainers.image.base.name Image reference of the image this image is based on (string)
-LABEL org.opencontainers.image.base.name="mcr.microsoft.com/dotnet/framework/aspnet:4.8.1-20250211-windowsservercore-ltsc2025"
-LABEL org.label-schema.os="Windows Server Core 2025 LTSC"
+LABEL org.opencontainers.image.base.name="mcr.microsoft.com/dotnet/framework/aspnet:4.8.1-20250114-windowsservercore-ltsc2022"
+LABEL org.label-schema.os="Windows Server Core 2022 LTSC"
 # [System.Environment]::OSVersion.Version
-LABEL org.label-schema.os-version="10.0.26100.0"
+LABEL org.label-schema.os-version="10.0.20348.0"
 LABEL org.label-schema.package="PowerShell"
 # $PSVersionTable
-LABEL org.label-schema.package-version="5.1.26100.2161"
+LABEL org.label-schema.package-version="5.1.20348.2849"
 LABEL org.label-schema.package="NuGet"
 LABEL org.label-schema.package-version="${NuGet_MinimumVersion}"
 LABEL org.label-schema.package="Az.Accounts"
@@ -96,10 +96,10 @@ LABEL org.label-schema.package-version="${Az_Accounts_MinimumVersion}"
 LABEL org.label-schema.package="IIS"
 # Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\InetStp\\'
 # Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\InetStp' | select InstallPath, VersionString, @{n="ProductVersion";e={(Get-ItemProperty ($_.InstallPath + "\w3wp.exe")).VersionInfo.ProductVersion}}
-LABEL org.label-schema.package-version="10.0.26100.1882"
+LABEL org.label-schema.package-version="10.0.20348.1"
 LABEL org.label-schema.package="ASP.Net Core Hosting Bundle"
 # Get-WmiObject -Class Win32_Product | Where-Object { $_.Name -like 'Microsoft ASP.NET Core*' }
-LABEL org.label-schema.package-version="9.0.4.25160"
+LABEL org.label-schema.package-version="9.0.5.25202"
 LABEL org.label-schema.package="IIS.ServiceMonitor"
 # (Get-Item 'C:\\ServiceMonitor.exe').VersionInfo
 LABEL org.label-schema.package-version="2.0.1.04"
@@ -151,7 +151,7 @@ Set-ExecutionPolicy -ExecutionPolicy Bypass -Force; `
 New-KEYTOSACMEAgentInstance `
     -Verbose:($Env:AA_Verbose -eq [bool]::TrueString) `
     -Debug:($Env:AA_Debug -eq [bool]::TrueString) `
-    -TenantId $Env:AA_TenantId `
+    -TenantId '00000000-aaaa-bbbb-cccc-000000000000' `
     -CAFriendlyName $Env:AA_CAFriendlyName `
     -CertificateSubjectName 'dummy' `
     -AuthenticationType $Env:AA_AuthenticationType `
