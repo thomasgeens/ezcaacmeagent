@@ -25,6 +25,12 @@
  
 .PARAMETER URL
     The URL of the ACME Agent instance. If omitted, it will be set to `https://{CertificateSubjectName}`.
+
+.PARAMETER DNSServers
+    List of DNS servers to configure on the system. Example: @("8.8.8.8", "8.8.4.4")
+
+.PARAMETER DNSSearchList
+    List of domain suffixes for DNS search list. Example: @("example.com", "corp.contoso.com")
  
 .PARAMETER WebDeployDownloadURL
     The URL to download the WebDeploy MSI installer. Default is `https://download.microsoft.com/download/b/d/8/bd882ec4-12e0-481a-9b32-0fae8e3c0b78/webdeploy_amd64_en-US.msi`.
@@ -60,14 +66,16 @@
     )
  
 .PARAMETER Stages
-    Stages to run: `Build`, `Deploy`, `Cleanup`, `HealthCheck`, `ServiceMonitor`. Default is all stages `Build, Deploy, Cleanup, HealthCheck, ServiceMonitor`.
-    Build - Installs the required PowerShell package providers and modules, IIS role, Web Deploy MSI package, and ASP.NET Core Runtime and the ACME Agent files.
+    Stages to run: `Build`, `Deploy`, `Cleanup`, `HealthCheck`, `ServiceMonitor`. Default is all stages `Build, Deploy, Cleanup, HealthCheck, ServiceMonitor`.    Build - Installs the required PowerShell package providers and modules, IIS role, Web Deploy MSI package, and ASP.NET Core Runtime and the ACME Agent files.
     Deploy - Authenticates to AzureAD SDK and KEYTOS EZCA, (re-)registers the ACME Agent instance, and verifies and renews the agent's certificate.
     Cleanup - Cleans up the temporary files and directories.
     HealthCheck - Verifies the health of the ACME Agent instance and the certificate.
 
 .EXAMPLE
     New-KEYTOSACMEAgentInstance -TenantId 'tenant.onmicrosoft.com' -CertificateSubjectName 'example.com' -FriendlyName 'Example' -AuthenticationType 'Interactive' -Cleanup -AutoReplace
+
+.EXAMPLE
+    New-KEYTOSACMEAgentInstance -TenantId 'tenant.onmicrosoft.com' -CertificateSubjectName 'example.com' -DNSServers @("8.8.8.8", "8.8.4.4") -DNSSearchList @("example.com", "corp.contoso.com")
 #>
  
 function New-KEYTOSACMEAgentInstance {
@@ -94,6 +102,12 @@ function New-KEYTOSACMEAgentInstance {
  
         [Parameter(Mandatory = $false, Position = 5, HelpMessage = 'Switch to activate the EZCA managed health checks of the ACME Agent instance. Default is $false.')]
         [switch]$AutomaticHealthChecks,
+
+        [Parameter(Mandatory = $false, Position = 15, HelpMessage = 'List of DNS servers to configure on the system. Example: @("8.8.8.8", "8.8.4.4")')]
+        [string[]]$DNSServers,
+
+        [Parameter(Mandatory = $false, Position = 16, HelpMessage = 'List of domain suffixes for DNS search list. Example: @("example.com", "corp.contoso.com")')]
+        [string[]]$DNSSearchList,
  
         [Parameter(Mandatory = $false, Position = 6, HelpMessage = 'The URL of the ACME Agent instance, in case omitted will be set to `https://{CertificateSubjectName}`.')]
         [string]$URL = "https://$CertificateSubjectName",
@@ -130,8 +144,8 @@ function New-KEYTOSACMEAgentInstance {
                     MaximumVersion = [version] '2.8.5.999'
                 }
             }
-        ),
-
+        ),        
+        
         [Parameter(Mandatory = $false, Position = 14, HelpMessage = 'Stages to run: `Build`, `Deploy`, `Cleanup`, `HealthCheck`, `ServiceMonitor`. Default is all stages `Build, Deploy, Cleanup, HealthCheck, ServiceMonitor)`.')]
         [ValidateSet('Build', 'Deploy', 'Cleanup', 'HealthCheck', 'ServiceMonitor')]
         [string[]]$Stages = @('Build', 'Deploy', 'Cleanup', 'HealthCheck', 'ServiceMonitor')
@@ -179,9 +193,11 @@ function New-KEYTOSACMEAgentInstance {
                 Write-Verbose "Downloading file from $Url to $DestinationPath"
                 Invoke-WebRequest -Uri $Url -OutFile $DestinationPath -UseBasicParsing -ErrorAction Stop
                 Write-Verbose "Successfully downloaded file to $DestinationPath"
-            } catch {
+            }
+            catch {
                 throw [System.Exception] "Failed to download file from $($Url): $($_.Exception.Message)"
-            } finally {
+            }
+            finally {
                 $ProgressPreference = $currentProgressPreference # Restore progress preference
             }
         }
@@ -234,7 +250,8 @@ function New-KEYTOSACMEAgentInstance {
                                         Import-Module $Module.ModuleName -MinimumVersion $Module.ModuleVersion -MaximumVersion $Module.MaximumVersion -ErrorAction 'Stop'
                                         Write-Verbose "Module $($Module.ModuleName) version $($ModuleVersion.Version) is imported"
                                         break;
-                                    } else {
+                                    }
+                                    else {
                                         Write-Verbose "Module $($Module.ModuleName) version $($ModuleVersion.Version) is already imported"
                                         break;
                                     }
@@ -249,7 +266,8 @@ function New-KEYTOSACMEAgentInstance {
                                         Write-Verbose "Package provider $($Module.PackageProvider.Name) version $($Module.PackageProvider.Version) is not installed"
                                         Write-Verbose "Installing package provider $($Module.PackageProvider.Name) version $($Module.PackageProvider.Version)"
                                         Install-PackageProvider -Name "$($Module.PackageProvider.Name)" -MinimumVersion $Module.PackageProvider.Version -MaximumVersion $Module.PackageProvider.MaximumVersion -Force -ErrorAction 'Stop'
-                                    } else {
+                                    }
+                                    else {
                                         foreach ($PackageProviderVersion in $InstalledPackageProviderVersion) {
                                             if (($PackageProviderVersion.Version -ge $Module.PackageProvider.Version) -and ($PackageProviderVersion.Version -le $Module.PackageProvider.MaximumVersion)) {
                                                 Write-Verbose "Found acceptable version $($PackageProviderVersion.Version) of package provider $($Module.PackageProvider.Name)"
@@ -288,7 +306,8 @@ function New-KEYTOSACMEAgentInstance {
                         Write-Verbose "The IIS role will be installed"
                         Install-WindowsFeature -name Web-Server -IncludeManagementTools
                         Write-Verbose "Successfully installed the IIS role"
-                    } else {
+                    }
+                    else {
                         Write-Verbose "The IIS role was already installed, we'll assume the Web Deploy role is also installed and we'll skip its installation!"
                         $SkipWebDeployInstallation = $true
                     }
@@ -300,7 +319,8 @@ function New-KEYTOSACMEAgentInstance {
                         Write-Verbose "The IIS site 'Default Web Site' exists and will be removed"
                         Remove-IISSite -Name 'Default Web Site' -Confirm:$false -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
                         Write-Verbose "Successfully removed the IIS site 'Default Web Site'"
-                    } else {
+                    }
+                    else {
                         Write-Verbose "The 'Default Web Site' does not exist, existing IIS sites:"
                         Write-Verbose "$(Get-IISSite | Format-Table | Out-String)"
                     }
@@ -314,7 +334,8 @@ function New-KEYTOSACMEAgentInstance {
                             if ($WebDeployInstalled) {
                                 Write-Verbose "The Web Deploy MSI package has already been installed"
                                 Write-Verbose "$($WebDeployInstalled | Format-Table | Out-String)"
-                            } else {
+                            }
+                            else {
                                 Write-Verbose "Downloading the Web Deploy MSI package"
                                 New-FileDownload -Url $WebDeployDownloadURL -DestinationPath $WebDeployMSIPath
                                 Write-Verbose "Successfully downloaded the Web Deploy MSI package"
@@ -326,7 +347,8 @@ function New-KEYTOSACMEAgentInstance {
                                 if ($InstallWebDeployMSI.ExitCode -eq 0) {
                                     Write-Verbose "Successfully installed the Web Deploy MSI package"
                                     Write-Verbose (Get-Content -Path $WebDeployLogFile | Out-String)
-                                } else {
+                                }
+                                else {
                                     throw [System.Exception] "Failed to install the Web Deploy MSI package: $($InstallWebDeployMSI.ExitCode) - See $WebDeployLogFile for more details"
                                 }
                             }
@@ -340,7 +362,8 @@ function New-KEYTOSACMEAgentInstance {
                         if ($ASPNetCoreRuntimeInstalled) {
                             Write-Verbose "The ASP.NET Core Runtime has already been installed"
                             Write-Verbose "$($ASPNetCoreRuntimeInstalled | Format-Table | Out-String)"
-                        } else {
+                        }
+                        else {
                             # Download the ASP.NET Core Runtime
                             Write-Verbose "Downloading the ASP.NET Core Runtime"
                             New-FileDownload -Url $ASPNetCoreRuntimeDownloadURL -DestinationPath $ASPNetCoreRuntimePath
@@ -390,7 +413,8 @@ function New-KEYTOSACMEAgentInstance {
                         Write-Verbose (Get-Item -Path $ACMEAgentDownloadPath | Format-Table | Out-String)
                         Write-Verbose "Cleaning up the current ACME Agent's installation ($IISrootDirectoryPath)"
                         Remove-Item -Path "$IISrootDirectoryPath\*" -Recurse -Force -ErrorAction SilentlyContinue
-                    } else {
+                    }
+                    else {
                         Write-Verbose "The ACME Agent's installation file hosted was already downloaded"
                     }
         
@@ -415,7 +439,8 @@ function New-KEYTOSACMEAgentInstance {
                     if (Test-Path -Path $ServiceMonitorExecutablePath -PathType Leaf) {
                         Write-Verbose "The Service Monitor's executable is already downloaded"
                         Write-Verbose (Get-Item -Path $ServiceMonitorExecutablePath | Format-Table | Out-String)
-                    } else {
+                    }
+                    else {
                         New-FileDownload -Url $ServiceMonitorDownloadURL -DestinationPath $ServiceMonitorExecutablePath
                         Write-Verbose "Successfully downloaded the Service Monitor executable to $ServiceMonitorExecutablePath"
                     }                   
@@ -426,8 +451,7 @@ function New-KEYTOSACMEAgentInstance {
             #region ACME Agent Instance Setup Stage
             if ($Stages -contains 'Deploy') {
                 if ($PSCmdlet.ShouldProcess('ACME Agent Instance', 'Install')) {
-                    Write-Verbose "### ACME Agent Instance Deploy Stage ####"
-
+                    Write-Verbose "### ACME Agent Instance Deploy Stage ####"                    
                     #region Authentication
                     if ($PSCmdlet.ShouldProcess('AzureAD SDK', 'Connect')) {
                         Write-Verbose "Authenticating to AzureAD SDK with Tenant ID: $($tenantId)"
@@ -460,6 +484,78 @@ function New-KEYTOSACMEAgentInstance {
                     $CurrentContext = Get-AzContext
                     $CurrentSubscription = Get-AzSubscription -SubscriptionId $CurrentContext.Subscription.Id
                     Write-Verbose "Successfully authenticated against AzureAD SDK as $($CurrentContext.Account.Id) ($($CurrentSubscription.Name))"
+                    
+                    #region Configure DNS Settings
+                    if ($PSCmdlet.ShouldProcess('DNS Settings', 'Configure')) {
+                        # Configure DNS Servers if provided
+                        if ($DNSServers -and $DNSServers.Count -gt 0) {
+                            Write-Verbose "Configuring DNS Servers: $($DNSServers -join ', ')"
+                            
+                            # Get all network adapters that are up
+                            $networkAdapters = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' }
+                            
+                            foreach ($adapter in $networkAdapters) {
+                                # Get current DNS server settings before making changes
+                                $currentDNSServers = (Get-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4).ServerAddresses
+                                Write-Verbose "Current DNS servers for adapter $($adapter.Name): $($currentDNSServers -join ', ')"
+                                
+                                Write-Verbose "Setting DNS servers for adapter: $($adapter.Name)"
+                                try {
+                                    # Set DNS servers for this adapter
+                                    Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -ServerAddresses $DNSServers
+                                    
+                                    # Verify the new settings were applied
+                                    $newDNSServers = (Get-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4).ServerAddresses
+                                    Write-Verbose "New DNS servers for adapter $($adapter.Name): $($newDNSServers -join ', ')"
+                                    Write-Verbose "Successfully set DNS servers for adapter: $($adapter.Name)"
+                                }
+                                catch {
+                                    Write-Warning "Failed to set DNS servers for adapter $($adapter.Name): $($_.Exception.Message)"
+                                }
+                            }
+                            Write-Verbose "DNS Servers configuration completed"
+                        }
+                        else {
+                            # Display current DNS server settings even if we're not changing them
+                            $networkAdapters = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' }
+                            foreach ($adapter in $networkAdapters) {
+                                $currentDNSServers = (Get-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4).ServerAddresses
+                                Write-Verbose "Current DNS servers for adapter $($adapter.Name): $($currentDNSServers -join ', ')"
+                            }
+                            Write-Verbose "No DNS Servers provided, skipping DNS server configuration"
+                        }
+                        
+                        # Configure DNS Search List if provided
+                        if ($DNSSearchList -and $DNSSearchList.Count -gt 0) {
+                            # Get current DNS suffix search list before making changes
+                            $currentSearchList = (Get-DnsClientGlobalSetting).SuffixSearchList
+                            Write-Verbose "Current DNS suffix search list: $($currentSearchList -join ', ')"
+                            
+                            Write-Verbose "Configuring DNS Search List: $($DNSSearchList -join ', ')"
+                            
+                            try {
+                                # Set the DNS suffix search list for all adapters
+                                Set-DnsClientGlobalSetting -SuffixSearchList $DNSSearchList
+                                
+                                # Verify the new settings were applied
+                                $newSearchList = (Get-DnsClientGlobalSetting).SuffixSearchList
+                                Write-Verbose "New DNS suffix search list: $($newSearchList -join ', ')"
+                                Write-Verbose "Successfully set DNS suffix search list"
+                            }
+                            catch {
+                                Write-Warning "Failed to set DNS suffix search list: $($_.Exception.Message)"
+                            }
+                            
+                            Write-Verbose "DNS Search List configuration completed"
+                        }
+                        else {
+                            # Display current DNS suffix search list even if we're not changing it
+                            $currentSearchList = (Get-DnsClientGlobalSetting).SuffixSearchList
+                            Write-Verbose "Current DNS suffix search list: $($currentSearchList -join ', ')"
+                            Write-Verbose "No DNS Search List provided, skipping DNS search list configuration"
+                        }
+                    }
+                    #endregion
 
                     Write-Verbose "Requesting a new AzureAD access token to be used as a bearer token (API key) for the KEYTOS EZCA API"
                     $bearerToken = ConvertTo-SecureString -AsPlainText (Get-AzAccessToken -TenantId $TenantId -ErrorAction Stop).Token -Force
@@ -490,7 +586,8 @@ function New-KEYTOSACMEAgentInstance {
                         if ($MyCAs.Count -eq 0) {
                             throw [System.Exception] "No CAs found"
                         }
-                    } else {
+                    }
+                    else {
                         throw [System.Exception] "Failed to retrieve the list of CAs"
                     }
 
@@ -506,13 +603,15 @@ function New-KEYTOSACMEAgentInstance {
                     if ($null -eq $CAFriendlyName) {
                         Write-Verbose "No CAFriendlyName provided, selecting the first Issuing Intermediate SSL CA"
                         $SelectedIssuingIntermediateSSLCA = $IssuingIntermediateCAs | Select-Object -First 1
-                    } else {
+                    }
+                    else {
                         Write-Verbose "Getting the Selected Issuing Intermediate SSL CA with CAFriendlyName: $($CAFriendlyName)"
                         $SelectedIssuingIntermediateSSLCA = $IssuingIntermediateCAs | Where-Object { $_.CAFriendlyName -eq $CAFriendlyName }
                     }
                     if ($SelectedIssuingIntermediateSSLCA.Count -eq 0) {
                         throw [System.Exception] "No Selected Issuing Intermediate SSL CA found"
-                    } else {
+                    }
+                    else {
                         Write-Verbose "Successfully retrieved the Selected Issuing Intermediate SSL CA:"
                         Write-Verbose "$($SelectedIssuingIntermediateSSLCA | Format-Table | Out-String)"
                     }
@@ -522,7 +621,8 @@ function New-KEYTOSACMEAgentInstance {
                     $LatestActiveSelectedIssuingIntermediateSSLCA = $SelectedIssuingIntermediateSSLCA.LocalCAs | Sort-Object -Property ExpiryDate -Descending | Select-Object -First 1
                     if ($null -eq $LatestActiveSelectedIssuingIntermediateSSLCA) {
                         throw [System.Exception] "No latest active Selected Issuing Intermediate SSL CA found"
-                    } else {
+                    }
+                    else {
                         Write-Verbose "Successfully retrieved the latest active Selected Issuing Intermediate SSL CA:"
                         Write-Verbose "$($LatestActiveSelectedIssuingIntermediateSSLCA | Format-Table | Out-String)"
                     }
@@ -569,15 +669,18 @@ function New-KEYTOSACMEAgentInstance {
                                         $DeleteACMEAgentInstance = (ConvertFrom-Json $iwrDeleteACMEAgentInstance.Content).Message
                                         Write-Verbose "Successfully deleted the existing ACME Agent instance:"
                                         Write-Verbose "$($DeleteACMEAgentInstance | Format-Table | Out-String)"
-                                    } else {
+                                    }
+                                    else {
                                         throw [System.Exception] "Failed to delete the existing ACME Agent instance: $((ConvertFrom-Json $iwrDeleteACMEAgentInstance.Content).Message)"
                                     }
-                                } else {
+                                }
+                                else {
                                     throw [System.Exception] "An ACME Agent instance with the same Certificate Subject Name already exists:`n$($ExistingACMEAgentInstance | Format-Table | Out-String)"
                                 }
                             }
                         }
-                    } else {
+                    }
+                    else {
                         throw [System.Exception] "Failed to verify there isn't an ACME Agent instance with the same Certificate Subject Name: $(ConvertFrom-Json $iwrGetACMEAgentInstances.Content)"
                     }
 
@@ -596,7 +699,8 @@ function New-KEYTOSACMEAgentInstance {
                         $MyDomains = ConvertFrom-Json (ConvertFrom-Json $iwrMyDomains.Content).Message
                         Write-Verbose "Successfully retrieved the list of domains:"
                         Write-Verbose "$($MyDomains | Format-Table | Out-String)"
-                    } else {
+                    }
+                    else {
                         throw [System.Exception]  "Failed to retrieve the list of domains: $((ConvertFrom-Json $iwrMyDomains.Content).Message)"
                     }
                     #-Verify the domain for the certificate subject name was already registered and approved
@@ -623,13 +727,16 @@ function New-KEYTOSACMEAgentInstance {
                                 $DeleteDomain = (ConvertFrom-Json $iwrDeleteDomain.Content).Message
                                 Write-Verbose "Successfully deleted the existing domain:"
                                 Write-Verbose "$($DeleteDomain | Format-Table | Out-String)"
-                            } else {
+                            }
+                            else {
                                 throw [System.Exception] "Failed to delete the existing domain: $((ConvertFrom-Json $iwrDeleteDomain.Content).Message)"
                             }
-                        } else {
+                        }
+                        else {
                             throw [System.Exception] "The domain for the certificate subject name $($CertificateSubjectName) is already registered and AutoReplace is NOT enabled"
                         }
-                    } else {
+                    }
+                    else {
                         Write-Verbose "The domain for the certificate subject name $($CertificateSubjectName) is still available"
                     }
 
@@ -659,7 +766,8 @@ function New-KEYTOSACMEAgentInstance {
                         $RegisterACMEAgentInstance = (ConvertFrom-Json $iwrRegisterACMEAgentInstance.Content).Message
                         Write-Verbose "Successfully registered the ACME Agent instance:"
                         Write-Verbose "$($RegisterACMEAgentInstance | Format-Table | Out-String)"
-                    } else {
+                    }
+                    else {
                         throw [System.Exception]  "Failed to register the ACME Agent instance: $((ConvertFrom-Json $iwrRegisterACMEAgentInstance.Content).Message)"
                     }
                 
@@ -673,7 +781,8 @@ function New-KEYTOSACMEAgentInstance {
                             $Certificate = [PSCustomObject]@{
                                 SerialNumber = ($_ -split ':')[1].Trim()
                             }
-                        } elseif ($_ -match 'NotAfter') {
+                        }
+                        elseif ($_ -match 'NotAfter') {
                             # Add the NotAfter property to the certificate object as a DateTime (example: 9/15/2025 10:49 AM)
                             $NotAferString = ($_ -split ': ')[1].Trim()
                             $NotAfter = [DateTime]::ParseExact($NotAferString, 'M/d/yyyy h:mm tt', $null)
@@ -699,7 +808,8 @@ function New-KEYTOSACMEAgentInstance {
                                     Start-Process $CertUtilExecutablePath -ArgumentList "-delstore My `"$($_.SerialNumber)`"" -Wait -NoNewWindow -PassThru -ErrorAction Stop | Out-Null
                                     Write-Verbose "Successfully deleted the expired certificate for the Certificate Subject Name ($CertificateSubjectName)"
                                 }
-                            } else {
+                            }
+                            else {
                                 throw [System.Exception] "Expired certificates are available in the local machine store for the Certificate Subject Name ($CertificateSubjectName)"
                             }
                         }
@@ -713,14 +823,17 @@ function New-KEYTOSACMEAgentInstance {
                                     Start-Process $CertUtilExecutablePath -ArgumentList "-delstore My `"$($_.SerialNumber)`"" -Wait -NoNewWindow -PassThru -ErrorAction Stop | Out-Null
                                     Write-Verbose "Successfully deleted the existing certificate for the Certificate Subject Name ($CertificateSubjectName)"
                                 }
-                            } else {
+                            }
+                            else {
                                 throw [System.Exception] "More than one valid certificate is available in the local machine store for the Certificate Subject Name ($CertificateSubjectName)"
                             }
-                        } elseif ($ValidCertificates.Count -eq 1) {
+                        }
+                        elseif ($ValidCertificates.Count -eq 1) {
                             Write-Verbose "A valid certificate is still available in the local machine store for the Certificate Subject Name ($CertificateSubjectName)"
                             Write-Verbose "$($ValidCertificates | Format-Table | Out-String)"
                             $ValidCertificate = $true
-                        } else {
+                        }
+                        else {
                             Write-Verbose "No valid certificate is available yet in the local machine store for the Certificate Subject Name ($CertificateSubjectName)"
                         }
                     }
@@ -794,7 +907,8 @@ OID=1.3.6.1.5.5.7.3.1
                             $GetCATemplates = (ConvertFrom-Json $iwrGetCATemplates.Content)
                             Write-Verbose "Successfully retrieved the CA Templates for the latest active Selected Issuing Intermediate SSL CA"
                             Write-Verbose "$($GetCATemplates | Format-Table | Out-String)"
-                        } else {
+                        }
+                        else {
                             throw [System.Exception] "Failed to retrieve the CA Templates for the latest active Selected Issuing Intermediate SSL CA: $(ConvertFrom-Json $iwrGetCATemplates.Content)"
                         }
     
@@ -804,7 +918,8 @@ OID=1.3.6.1.5.5.7.3.1
                         if ($SSLTemplate) {
                             Write-Verbose "Successfully retrieved the SSL Template from the CA Templates"
                             Write-Verbose "$($SSLTemplate | Format-Table | Out-String)"
-                        } else {
+                        }
+                        else {
                             throw [System.Exception] "Failed to retrieve the SSL Template from the CA Templates"
                         }
     
@@ -847,7 +962,8 @@ OID=1.3.6.1.5.5.7.3.1
                             $SSLCertificate = ConvertFrom-Json $iwrRequestSSLCertificateV2.Content
                             Write-Verbose "Successfully submitted the CSR for signing to the latest active Selected Issuing Intermediate SSL CA"
                             Write-Verbose "$($SSLCertificate | Get-Member -Name *certificate* | Format-Table | Out-String)"
-                        } else {
+                        }
+                        else {
                             throw [System.Exception] "Failed to submit the CSR to the latest active Selected Issuing Intermediate SSL CA: $(ConvertFrom-Json $iwrRequestSSLCertificateV2.Content)"
                         }
     
@@ -886,7 +1002,8 @@ OID=1.3.6.1.5.5.7.3.1
                         $CertReqAcceptSuccess = (Get-Content -Path $CertReqAccept) -match 'Installed Certificate'
                         if ($CertReqAcceptSuccess) {
                             Write-Verbose "Successfully completed the certificate request and stored to the local machine store"
-                        } else {
+                        }
+                        else {
                             throw [System.Exception] "Failed to complete the certificate request and store to the local machine store:`n$(Get-Content -Path $CertReqAccept)"
                         }
                     }
@@ -900,11 +1017,13 @@ OID=1.3.6.1.5.5.7.3.1
                     $CertificateThumbprint
                     if ($CertificateThumbprint.Count -le 0) {
                         throw [System.Exception] "Failed to retrieve the Certificate Thumbprint from the local machine store"
-                    } elseif ($CertificateThumbprint.Count -gt 1) {
+                    }
+                    elseif ($CertificateThumbprint.Count -gt 1) {
                         Write-Error "Multiple Certificate Thumbprints found in the local machine store"
                         Write-Error ($CertificateThumbprint | Format-Table | Out-String)
                         throw [System.Exception] "Multiple Certificate Thumbprints found in the local machine store"
-                    } else {
+                    }
+                    else {
                         Write-Verbose "Successfully retrieved the Certificate Thumbprint from the local machine store"
                         Write-Verbose ($CertificateThumbprint | Format-Table | Out-String)
                     }
@@ -930,7 +1049,8 @@ OID=1.3.6.1.5.5.7.3.1
                         $IISAppPool.ManagedRuntimeVersion = ''
                         Write-Verbose "Successfully created the IIS App Pool"
                         Write-Verbose ($IISAppPool | Format-Table | Out-String)
-                    } else {
+                    }
+                    else {
                         Write-Verbose "The IIS App Pool ($IISAppPoolName) already exists"
                         Write-Verbose ($IISAppPool | Format-Table | Out-String)
                     }
@@ -955,7 +1075,8 @@ OID=1.3.6.1.5.5.7.3.1
                         $IISSite = Get-IISSite -Name $IISAppName -ErrorAction Stop
                         Write-Verbose "Successfully created and bound the certificate to the IIS site"
                         Write-Verbose ($IISSite | Format-Table | Out-String)
-                    } else {
+                    }
+                    else {
                         Write-Verbose "The IIS site ($IISAppName) already exists"
                         Write-Verbose ($IISSite | Format-Table | Out-String)
                         Write-Verbose "Updating the IIS Site's web binding"
@@ -1030,15 +1151,17 @@ OID=1.3.6.1.5.5.7.3.1
                     Write-Verbose "Prewarming the application pool ($IISAppPoolName)"
                     try {
                         Invoke-WebRequest -Method GET `
-                        -Uri "https://localhost/api/Health/Overall" `
-                        -ContentType 'application/json' `
-                        -Headers @{ Host = $CertificateSubjectName } `
-                        -UseBasicParsing `
-                        -ErrorAction SilentlyContinue | Out-Null
-                    } catch {
+                            -Uri "https://localhost/api/Health/Overall" `
+                            -ContentType 'application/json' `
+                            -Headers @{ Host = $CertificateSubjectName } `
+                            -UseBasicParsing `
+                            -ErrorAction SilentlyContinue | Out-Null
+                    }
+                    catch {
                         Write-Verbose "Prewarming the application pool failed, sleeping for 5 seconds..."
                         Start-Sleep -Seconds 5 # Wait for 5 seconds to allow the application pool to warm up
-                    } finally {
+                    }
+                    finally {
                         Write-Verbose "Tried to prewarm the application pool ($IISAppPoolName)"
                     }
 
@@ -1074,7 +1197,8 @@ OID=1.3.6.1.5.5.7.3.1
                     if ($iwrHealthCheck.StatusCode -eq 200) {
                         Write-Verbose "Successfully verified the connection to the ACME Agent's health endpoint"
                         Write-Verbose "$($iwrHealthCheck.Content | ConvertFrom-Json | Format-Table | Out-String)"
-                    } else {
+                    }
+                    else {
                         throw [System.Exception] "Failed to verify the connection to the ACME Agent's health endpoint: $($iwrHealthCheck.StatusCode) - $($iwrHealthCheck.Content)"
                     }
                 }
@@ -1088,7 +1212,8 @@ OID=1.3.6.1.5.5.7.3.1
                     Write-Verbose "Starting the Service Monitor executable"
                     try {
                         Start-Process -FilePath $ServiceMonitorExecutablePath -ArgumentList 'w3svc', $IISAppPoolName -NoNewWindow -PassThru -Wait -ErrorAction Stop
-                    } catch {
+                    }
+                    catch {
                         throw [System.Exception] "Failed to start the Service Monitor executable: $($_.Exception.Message)"
                     }
                 }

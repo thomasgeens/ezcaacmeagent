@@ -20,6 +20,8 @@ ARG CertificateSubjectName # The subject name for the authentication certificate
 ARG AuthenticationType="Identity" # The authentication type to be used. Can be one of the following `Identity`, `UseDeviceCode` or `Interactive`. Default is `Identity`.
 ARG FriendlyName="" # The friendly name of the ACME agent instance. If omitted, it will be set to the Certificate Subject Name.
 ARG AutomaticHealthChecks="false" # Switch to activate the EZCA managed health checks of the ACME Agent instance. Default is $false.
+ARG DNSServers="" # The DNS servers to be used for the ACME Agent instance. If omitted, it will be set to the DNS servers of the host machine.
+ARG DNSSearchList="" # The DNS search list to be used for the ACME Agent instance. If omitted, it will be set to the DNS search list of the host machine.
 ARG URL # The URL of the ACME Agent instance. If omitted, it will be set to `https://{CertificateSubjectName}`.
 ARG WebDeployDownloadURL="https://download.microsoft.com/download/b/d/8/bd882ec4-12e0-481a-9b32-0fae8e3c0b78/webdeploy_amd64_en-US.msi" # The URL to download the WebDeploy MSI installer. Default is `https://download.microsoft.com/download/b/d/8/bd882ec4-12e0-481a-9b32-0fae8e3c0b78/webdeploy_amd64_en-US.msi`.
 ARG ASPNetCoreRuntimeDownloadURL="https://aka.ms/dotnet/9.0/daily/dotnet-hosting-win.exe" # The URL to download the ASP.NET Core Runtime installer. Default is `https://aka.ms/dotnet/9.0/daily/dotnet-hosting-win.exe`. Updated links can be found at `https://github.com/dotnet/aspnetcore`.
@@ -120,6 +122,8 @@ AA_CertificateSubjectName=${CertificateSubjectName} `
 AA_AuthenticationType=${AuthenticationType} `
 AA_FriendlyName=${FriendlyName} `
 AA_AutomaticHealthChecks=${AutomaticHealthChecks} `
+AA_DNSServers=${DNSServers} `
+AA_DNSSearchList=${DNSSearchList} `
 AA_URL=${URL} `
 AA_WebDeployDownloadURL=${WebDeployDownloadURL} `
 AA_ASPNetCoreRuntimeDownloadURL=${ASPNetCoreRuntimeDownloadURL} `
@@ -200,6 +204,8 @@ New-KEYTOSACMEAgentInstance `
     -AuthenticationType $Env:AA_AuthenticationType `
     -FriendlyName $Env:AA_FriendlyName `
     -AutomaticHealthChecks:($Env:AA_AutomaticHealthChecks -eq [bool]::TrueString) `
+    -DNSServers $Env:AA_DNSServers `
+    -DNSSearchList $Env:AA_DNSSearchList `
     -URL $Env:AA_URL `
     -WebDeployDownloadURL $Env:AA_WebDeployDownloadURL `
     -ASPNetCoreRuntimeDownloadURL $Env:AA_ASPNetCoreRuntimeDownloadURL `
