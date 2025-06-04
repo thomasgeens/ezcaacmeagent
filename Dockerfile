@@ -12,28 +12,32 @@ LABEL maintainer="Thomas Geens <thomas@geens.be>"
 ARG BUILD_DATE # Date and time on which the image was built, conforming to RFC 3339.
 ARG BUILD_VERSION # Version of the packaged software.
 ARG VCS_REF # Source control revision identifier for the packaged software.
-ARG Verbose="true" # Switch to enable or disable verbose logging. Default is `$true`.
-ARG Debug="false" # Switch to enable or disable debug logging. Default is `$false`.
-ARG TenantId="" # The tenant ID of the Azure AD tenant. Can be in the form of `tenant.onmicrosoft.com` or the GUID.
-ARG CAFriendlyName="" # The friendly name of the Issuing Intermediate SSL CA to be selected from the Issuing CA list. If omitted, the first CA in the list will be selected.
-ARG CertificateSubjectName # The subject name for the authentication certificate that will be used to authenticate with EZCA.
-ARG AuthenticationType="Identity" # The authentication type to be used. Can be one of the following `Identity`, `UseDeviceCode` or `Interactive`. Default is `Identity`.
-ARG FriendlyName="" # The friendly name of the ACME agent instance. If omitted, it will be set to the Certificate Subject Name.
-ARG AutomaticHealthChecks="false" # Switch to activate the EZCA managed health checks of the ACME Agent instance. Default is $false.
-ARG DNSServers="" # The DNS servers to be used for the ACME Agent instance. If omitted, it will be set to the DNS servers of the host machine.
-ARG DNSSearchList="" # The DNS search list to be used for the ACME Agent instance. If omitted, it will be set to the DNS search list of the host machine.
-ARG URL # The URL of the ACME Agent instance. If omitted, it will be set to `https://{CertificateSubjectName}`.
-ARG WebDeployDownloadURL="https://download.microsoft.com/download/b/d/8/bd882ec4-12e0-481a-9b32-0fae8e3c0b78/webdeploy_amd64_en-US.msi" # The URL to download the WebDeploy MSI installer. Default is `https://download.microsoft.com/download/b/d/8/bd882ec4-12e0-481a-9b32-0fae8e3c0b78/webdeploy_amd64_en-US.msi`.
-ARG ASPNetCoreRuntimeDownloadURL="https://aka.ms/dotnet/9.0/daily/dotnet-hosting-win.exe" # The URL to download the ASP.NET Core Runtime installer. Default is `https://aka.ms/dotnet/9.0/daily/dotnet-hosting-win.exe`. Updated links can be found at `https://github.com/dotnet/aspnetcore`.
-ARG ServiceMonitorDownloadURL="https://dotnetbinaries.blob.core.windows.net/servicemonitor/2.0.1.10/ServiceMonitor.exe" # The URL to download the Service Monitor executable. Default is `https://dotnetbinaries.blob.core.windows.net/servicemonitor/2.0.1.10/ServiceMonitor.exe`. Updated links can be found at `https://github.com/microsoft/IIS.ServiceMonitor`.
-ARG AppInsightsEndpoint="" # The endpoint of the Application Insights instance.
-ARG ACMEAgentDownloadURL="https://download.keytos.io/Downloads/EZCAACME/ACMEAgent.zip" # The URL to download the ACME Agent ZIP file. Default is `https://download.keytos.io/Downloads/EZCAACME/ACMEAgent.zip`.
-ARG AutoReplace="false" # Switch to enable or disable the automatic replacement of an existing ACME Agent instance. Default is $false.
-ARG NuGet_MinimumVersion="2.8.5.208" # The version of the NuGet package provider to be installed. Default is `2.8.5.208`.
-ARG NuGet_MaximumVersion="2.8.5.999" # The maximum version of the NuGet package provider to be installed. Default is `2.8.5.999`.
-ARG Az_Accounts_MinimumVersion="5.1.0" # The minimum version of the Az.Accounts module to be installed. Default is `5.1.0`.
-ARG Az_Accounts_MaximumVersion="5.9.99999" # The maximum version of the Az.Accounts module to be installed. Default is `5.9.99999`.
-ARG Stages="Deploy, Cleanup, HealthCheck, ServiceMonitor" # Stages to run: `Build`, `Deploy`, `Cleanup`, `HealthCheck`, `ServiceMonitor`. Default is all stages `Build, Deploy, Cleanup, HealthCheck, ServiceMonitor`.
+ARG AA_Verbose="true" # Switch to enable or disable verbose logging. Default is `$true`.
+ARG AA_Debug="false" # Switch to enable or disable debug logging. Default is `$false`.
+ARG AA_TenantId="" # The tenant ID of the Azure AD tenant. Can be in the form of `tenant.onmicrosoft.com` or the GUID.
+ARG AA_CAFriendlyName="" # The friendly name of the Issuing Intermediate SSL CA to be selected from the Issuing CA list. If omitted, the first CA in the list will be selected.
+ARG AA_CertificateSubjectName # The subject name for the authentication certificate that will be used to authenticate with EZCA.
+ARG AA_AuthenticationType="Identity" # The authentication type to be used. Can be one of the following `Identity`, `UseDeviceCode` or `Interactive`. Default is `Identity`.
+ARG AA_ClientId="" # The client ID of the Azure AD application that will be used to authenticate with EZCA.
+ARG AA_ClientSecret="" # The client secret of the Azure AD application that will be used to authenticate with EZCA.
+ARG AA_CertificateThumbprint="" # The thumbprint of the authentication certificate of the Azure AD application that will be used to authenticate with EZCA. This certificate should already be stored in the Windows Certificate Store.
+ARG AA_CertificateBase64="" # The base64 encoded content of the authentication certificate of the Azure AD application that will be used to authenticate with EZCA.
+ARG AA_FriendlyName="" # The friendly name of the ACME agent instance. If omitted, it will be set to the Certificate Subject Name.
+ARG AA_AutomaticHealthChecks="false" # Switch to activate the EZCA managed health checks of the ACME Agent instance. Default is $false.
+ARG AA_DNSServers="" # The DNS servers to be used for the ACME Agent instance. If omitted, it will be set to the DNS servers of the host machine.
+ARG AA_DNSSearchList="" # The DNS search list to be used for the ACME Agent instance. If omitted, it will be set to the DNS search list of the host machine.
+ARG AA_URL # The URL of the ACME Agent instance. If omitted, it will be set to `https://{CertificateSubjectName}`.
+ARG AA_WebDeployDownloadURL="https://download.microsoft.com/download/b/d/8/bd882ec4-12e0-481a-9b32-0fae8e3c0b78/webdeploy_amd64_en-US.msi" # The URL to download the WebDeploy MSI installer. Default is `https://download.microsoft.com/download/b/d/8/bd882ec4-12e0-481a-9b32-0fae8e3c0b78/webdeploy_amd64_en-US.msi`.
+ARG AA_ASPNetCoreRuntimeDownloadURL="https://aka.ms/dotnet/9.0/daily/dotnet-hosting-win.exe" # The URL to download the ASP.NET Core Runtime installer. Default is `https://aka.ms/dotnet/9.0/daily/dotnet-hosting-win.exe`. Updated links can be found at `https://github.com/dotnet/aspnetcore`.
+ARG AA_ServiceMonitorDownloadURL="https://dotnetbinaries.blob.core.windows.net/servicemonitor/2.0.1.10/ServiceMonitor.exe" # The URL to download the Service Monitor executable. Default is `https://dotnetbinaries.blob.core.windows.net/servicemonitor/2.0.1.10/ServiceMonitor.exe`. Updated links can be found at `https://github.com/microsoft/IIS.ServiceMonitor`.
+ARG AA_AppInsightsEndpoint="" # The endpoint of the Application Insights instance.
+ARG AA_ACMEAgentDownloadURL="https://download.keytos.io/Downloads/EZCAACME/ACMEAgent.zip" # The URL to download the ACME Agent ZIP file. Default is `https://download.keytos.io/Downloads/EZCAACME/ACMEAgent.zip`.
+ARG AA_AutoReplace="false" # Switch to enable or disable the automatic replacement of an existing ACME Agent instance. Default is $false.
+ARG AA_NuGet_MinimumVersion="2.8.5.208" # The version of the NuGet package provider to be installed. Default is `2.8.5.208`.
+ARG AA_NuGet_MaximumVersion="2.8.5.999" # The maximum version of the NuGet package provider to be installed. Default is `2.8.5.999`.
+ARG AA_Az_Accounts_MinimumVersion="5.1.0" # The minimum version of the Az.Accounts module to be installed. Default is `5.1.0`.
+ARG AA_Az_Accounts_MaximumVersion="5.9.99999" # The maximum version of the Az.Accounts module to be installed. Default is `5.9.99999`.
+ARG AA_Stages="Deploy, Cleanup, HealthCheck, ServiceMonitor" # Stages to run: `Build`, `Deploy`, `Cleanup`, `HealthCheck`, `ServiceMonitor`. Default is all stages `Build, Deploy, Cleanup, HealthCheck, ServiceMonitor`.
 
 # Expose the ports for the ACME Agent instance
 EXPOSE 443
@@ -114,28 +118,32 @@ LABEL org.label-schema.package-version="1.0.0.0"
 
 # Set the environment variables
 ENV `
-AA_Verbose=${Verbose} `
-AA_Debug=${Debug} `
-AA_TenantId=${TenantId} `
-AA_CAFriendlyName=${CAFriendlyName} `
-AA_CertificateSubjectName=${CertificateSubjectName} `
-AA_AuthenticationType=${AuthenticationType} `
-AA_FriendlyName=${FriendlyName} `
-AA_AutomaticHealthChecks=${AutomaticHealthChecks} `
-AA_DNSServers=${DNSServers} `
-AA_DNSSearchList=${DNSSearchList} `
-AA_URL=${URL} `
-AA_WebDeployDownloadURL=${WebDeployDownloadURL} `
-AA_ASPNetCoreRuntimeDownloadURL=${ASPNetCoreRuntimeDownloadURL} `
-AA_ServiceMonitorDownloadURL=${ServiceMonitorDownloadURL} `
-AA_AppInsightsEndpoint=${AppInsightsEndpoint} `
-AA_ACMEAgentDownloadURL=${ACMEAgentDownloadURL} `
-AA_AutoReplace=${AutoReplace} `
-AA_NuGet_MinimumVersion=${NuGet_MinimumVersion} `
-AA_NuGet_MaximumVersion=${NuGet_MaximumVersion} `
-AA_Az_Accounts_MinimumVersion=${Az_Accounts_MinimumVersion} `
-AA_Az_Accounts_MaximumVersion=${Az_Accounts_MaximumVersion} `
-AA_Stages=${Stages}
+AA_Verbose=${AA_Verbose} `
+AA_Debug=${AA_Debug} `
+AA_TenantId=${AA_TenantId} `
+AA_CAFriendlyName=${AA_CAFriendlyName} `
+AA_CertificateSubjectName=${AA_CertificateSubjectName} `
+AA_AuthenticationType=${AA_AuthenticationType} `
+AA_ClientId=${AA_ClientId} `
+AA_ClientSecret=${AA_ClientSecret} `
+AA_CertificateThumbprint=${AA_CertificateThumbprint} `
+AA_CertificateBase64=${AA_CertificateBase64} `
+AA_FriendlyName=${AA_FriendlyName} `
+AA_AutomaticHealthChecks=${AA_AutomaticHealthChecks} `
+AA_DNSServers=${AA_DNSServers} `
+AA_DNSSearchList=${AA_DNSSearchList} `
+AA_URL=${AA_URL} `
+AA_WebDeployDownloadURL=${AA_WebDeployDownloadURL} `
+AA_ASPNetCoreRuntimeDownloadURL=${AA_ASPNetCoreRuntimeDownloadURL} `
+AA_ServiceMonitorDownloadURL=${AA_ServiceMonitorDownloadURL} `
+AA_AppInsightsEndpoint=${AA_AppInsightsEndpoint} `
+AA_ACMEAgentDownloadURL=${AA_ACMEAgentDownloadURL} `
+AA_AutoReplace=${AA_AutoReplace} `
+AA_NuGet_MinimumVersion=${AA_NuGet_MinimumVersion} `
+AA_NuGet_MaximumVersion=${AA_NuGet_MaximumVersion} `
+AA_Az_Accounts_MinimumVersion=${AA_Az_Accounts_MinimumVersion} `
+AA_Az_Accounts_MaximumVersion=${AA_Az_Accounts_MaximumVersion} `
+AA_Stages=${AA_Stages}
 
 # Set the working directory
 WORKDIR /
@@ -202,6 +210,10 @@ New-KEYTOSACMEAgentInstance `
     -CAFriendlyName $Env:AA_CAFriendlyName `
     -CertificateSubjectName $Env:AA_CertificateSubjectName `
     -AuthenticationType $Env:AA_AuthenticationType `
+    -ClientId $Env:AA_ClientId `
+    -ClientSecret:$(if ($Env:AA_ClientSecret) { ConvertTo-SecureString $Env:AA_ClientSecret -AsPlainText -Force } else { $null }) `
+    -CertificateThumbprint $Env:AA_CertificateThumbprint `
+    -CertificateBase64:$(if ($Env:AA_CertificateBase64) { ConvertTo-SecureString $Env:AA_CertificateBase64 -AsPlainText -Force } else { $null }) `
     -FriendlyName $Env:AA_FriendlyName `
     -AutomaticHealthChecks:($Env:AA_AutomaticHealthChecks -eq [bool]::TrueString) `
     -DNSServers $Env:AA_DNSServers `
