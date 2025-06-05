@@ -4,8 +4,8 @@
 # This Dockerfile builds a container image for the KEYTOS EZCA ACME Agent on Windows Server Core 2022 LTSC.
 # It installs the necessary dependencies, downloads the EZCA ACME Agent, and sets up the environment for running the agent.
 # The container image is based on the Windows Server Core 2022 LTSC image with .NET Framework 4.8 and ASP.NET Core Hosting Bundle installed.
-# Base image: mcr.microsoft.com/dotnet/framework/aspnet:4.8.1-20250114-windowsservercore-ltsc2022
-FROM mcr.microsoft.com/dotnet/framework/aspnet@sha256:9e0c3d8e8a0b8163900a9bfb4d67c30795071f401442c3e422c461fedf5c80f1
+# Base image: mcr.microsoft.com/dotnet/framework/aspnet:4.8.1-20250513-windowsservercore-ltsc2022
+FROM mcr.microsoft.com/dotnet/framework/aspnet@sha256:2e725c8b67f3144385e9b977ea893d24ede03c32a024d12ef80cbcbe132755f6
 LABEL maintainer="Thomas Geens <thomas@geens.be>"
 
 # Build-time arguments
@@ -27,10 +27,10 @@ ARG ServiceMonitorDownloadURL="https://dotnetbinaries.blob.core.windows.net/serv
 ARG AppInsightsEndpoint="" # The endpoint of the Application Insights instance.
 ARG ACMEAgentDownloadURL="https://download.keytos.io/Downloads/EZCAACME/ACMEAgent.zip" # The URL to download the ACME Agent ZIP file. Default is `https://download.keytos.io/Downloads/EZCAACME/ACMEAgent.zip`.
 ARG AutoReplace="false" # Switch to enable or disable the automatic replacement of an existing ACME Agent instance. Default is $false.
-ARG NuGet_MinimumVersion="2.8.5.201" # The version of the NuGet package provider to be installed. Default is `2.8.5.201`.
+ARG NuGet_MinimumVersion="2.8.5.208" # The version of the NuGet package provider to be installed. Default is `2.8.5.208`.
 ARG NuGet_MaximumVersion="2.8.5.999" # The maximum version of the NuGet package provider to be installed. Default is `2.8.5.999`.
-ARG Az_Accounts_MinimumVersion="4.0.2" # The minimum version of the Az.Accounts module to be installed. Default is `4.0.2`.
-ARG Az_Accounts_MaximumVersion="4.0.99999" # The maximum version of the Az.Accounts module to be installed. Default is `4.0.2`.
+ARG Az_Accounts_MinimumVersion="5.1.0" # The minimum version of the Az.Accounts module to be installed. Default is `5.1.0`.
+ARG Az_Accounts_MaximumVersion="5.9.99999" # The maximum version of the Az.Accounts module to be installed. Default is `5.9.99999`.
 ARG Stages="Deploy, Cleanup, HealthCheck, ServiceMonitor" # Stages to run: `Build`, `Deploy`, `Cleanup`, `HealthCheck`, `ServiceMonitor`. Default is all stages `Build, Deploy, Cleanup, HealthCheck, ServiceMonitor`.
 
 # Expose the ports for the ACME Agent instance
@@ -80,9 +80,12 @@ LABEL org.opencontainers.image.description="KEYTOS EZCA ACME Agent on Windows Se
 # org.opencontainers.image.base.digest Digest of the image this image is based on (string)
 # This SHOULD be the immediate image sharing zero-indexed layers with the image, such as from a Dockerfile FROM statement.
 # This SHOULD NOT reference any other images used to generate the contents of the image (e.g., multi-stage Dockerfile builds).
-LABEL org.opencontainers.image.base.digest="sha256:ade9d7aa2a163c16c2d33d808208253166e91e801a4765fca125bc8d60ae3894"
+# $baseImage = "mcr.microsoft.com/dotnet/framework/aspnet:4.8.1-20250513-windowsservercore-ltsc2022"
+# $digest = (docker inspect $baseImage | ConvertFrom-Json).RepoDigests[0] -replace "^.*@"
+# Write-Output "LABEL org.opencontainers.image.base.digest=`"$digest`""
+LABEL org.opencontainers.image.base.digest="sha256:2e725c8b67f3144385e9b977ea893d24ede03c32a024d12ef80cbcbe132755f6"
 # org.opencontainers.image.base.name Image reference of the image this image is based on (string)
-LABEL org.opencontainers.image.base.name="mcr.microsoft.com/dotnet/framework/aspnet:4.8.1-20250114-windowsservercore-ltsc2022"
+LABEL org.opencontainers.image.base.name="mcr.microsoft.com/dotnet/framework/aspnet:4.8.1-20250513-windowsservercore-ltsc2022"
 LABEL org.label-schema.os="Windows Server Core 2022 LTSC"
 # [System.Environment]::OSVersion.Version
 LABEL org.label-schema.os-version="10.0.20348.0"

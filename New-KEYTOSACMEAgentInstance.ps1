@@ -45,15 +45,15 @@
     Switch to enable or disable the automatic replacement of an existing ACME Agent instance. Default is $false.
 
 .PARAMETER ModuleList
-    List of modules to be installed. Default is `Az.Accounts` module with version `4.0.2` and maximum version `4.0.99999`. Using the NuGet package provider with version `2.8.5.201` and maximum version `2.8.5.999`.
+    List of modules to be installed. Default is `Az.Accounts` module with version `5.1.0` and maximum version `5.9.99999`. Using the NuGet package provider with version `2.8.5.208` and maximum version `2.8.5.999`.
     @(
         @{
             ModuleName      = 'Az.Accounts'
-            ModuleVersion   = [version] '4.0.2'
-            MaximumVersion  = [version] '4.0.99999'
+            ModuleVersion   = [version] '5.1.0'
+            MaximumVersion  = [version] '5.9.99999'
             PackageProvider = @{
                 Name           = 'NuGet'
-                Version        = [version] '2.8.5.201'
+                Version        = [version] '2.8.5.208'
                 MaximumVersion = [version] '2.8.5.999'
             }
         }
@@ -116,17 +116,17 @@ function New-KEYTOSACMEAgentInstance {
         [Parameter(Mandatory = $false, Position = 12, HelpMessage = 'Switch to enable or disable the automatic replacement of an existing ACME Agent instance. Default is $false.')]
         [switch]$AutoReplace,
 
-        [Parameter(Mandatory = $false, Position = 13, HelpMessage = 'Module list to be used with correlating package providers. Default is `@( @{ ModuleName = ''Az.Accounts'', ModuleVersion = [version] ''4.0.2'', MaximumVersion  = [version] ''4.0.99999'', PackageProvider = @{ Name = ''NuGet'', Version = [version] ''2.8.5.201'', MaximumVersion = [version] ''2.8.5.999'' } } )`.')]
+        [Parameter(Mandatory = $false, Position = 19, HelpMessage = 'Module list to be used with correlating package providers. Default is `@( @{ ModuleName = ''Az.Accounts'', ModuleVersion = [version] ''5.1.0'', MaximumVersion  = [version] ''5.9.99999'', PackageProvider = @{ Name = ''NuGet'', Version = [version] ''2.8.5.208'', MaximumVersion = [version] ''2.8.5.999'' } } )`.')]
         [ValidateNotNullOrEmpty()]
         [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', 'ModuleList')]
         [Object[]]$ModuleList = @(
             @{
                 ModuleName      = 'Az.Accounts'
-                ModuleVersion   = [version] '4.0.2'
-                MaximumVersion  = [version] '4.0.99999'
+                ModuleVersion   = [version] '5.2.0'
+                MaximumVersion  = [version] '5.9.99999'
                 PackageProvider = @{
                     Name           = 'NuGet'
-                    Version        = [version] '2.8.5.201'
+                    Version        = [version] '2.8.5.208'
                     MaximumVersion = [version] '2.8.5.999'
                 }
             }
@@ -206,11 +206,11 @@ function New-KEYTOSACMEAgentInstance {
                         # $ModuleList = @(
                         #     @{
                         #         ModuleName      = 'Az.Accounts'
-                        #         ModuleVersion   = [version] '4.0.2'
-                        #         MaximumVersion  = [version] '4.0.99999'
+                        #         ModuleVersion   = [version] '5.1.0'
+                        #         MaximumVersion  = [version] '5.9.99999'
                         #         PackageProvider = @{
                         #             Name           = 'NuGet'
-                        #             Version        = [version] '2.8.5.201'
+                        #             Version        = [version] '2.8.5.208'
                         #             MaximumVersion = [version] '2.8.5.999'
                         #         }
                         #     }
