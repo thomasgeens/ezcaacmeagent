@@ -53,6 +53,13 @@ docker run -d --name acme-agent -p 443:443 `
   thomasgeens/ezcaacmeagent:2022
 ```
 
+# Run with env file and overrides and start an interactive powershell session
+docker run --rm -it --name acme-agent -p 443:443 `
+  --env-file env.list `
+  --entrypoint powershell.exe `
+  thomasgeens/ezcaacmeagent:2022
+```
+
 ## Environment Variable Reference
 
 | Variable | Description | Example |
