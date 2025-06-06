@@ -742,7 +742,7 @@ function New-KEYTOSACMEAgentInstance {
                     #endregion
 
                     Write-Verbose "Requesting a new AzureAD access token to be used as a bearer token (API key) for the KEYTOS EZCA API"
-                    $bearerToken = ConvertTo-SecureString -AsPlainText (Get-AzAccessToken -TenantId $TenantId -ErrorAction Stop).Token -Force
+                    $bearerToken = (Get-AzAccessToken -TenantId $TenantId -ErrorAction Stop).Token
                     Write-Verbose "Successfully retrieved a new AzureAD access token"
                     Write-Verbose $bearerToken
                     #endregion
@@ -1040,7 +1040,7 @@ Subject = "CN=$CertificateSubjectName"
 
 KeySpec = 1
 KeyLength = 4096
-Exportable = FALSE
+Exportable = TRUE
 MachineKeySet = $CertReqMachineKeySet
 SMIME = False
 PrivateKeyArchive = FALSE
@@ -1212,6 +1212,50 @@ OID=1.3.6.1.5.5.7.3.1
                         Write-Verbose ($CertificateThumbprint | Format-Table | Out-String)
                     }
 
+                    # Providing IIS_IUSRS group with Full Control and Read access to the private key of the certificate
+                    Write-Output "Providing IIS_IUSRS group with Full Control access to the private key of the certificate"
+                    $Certificate = Get-Item "Cert:\LocalMachine\My\$($CertificateThumbprint)"
+
+                    # Find the private key file
+                    $KeyContainerName = $Certificate.PrivateKey.CspKeyContainerInfo.UniqueKeyContainerName
+                    Write-Output "Key container name: $KeyContainerName"
+
+                    # Path to the private key file (Machine Keys)
+                    $MachineKeysPath = "$env:ALLUSERSPROFILE\Microsoft\Crypto\RSA\MachineKeys"
+                    $KeyFilePath = Get-ChildItem -Path $MachineKeysPath -Filter $KeyContainerName | Select-Object -ExpandProperty FullName
+                    Write-Output "Private key file path: $KeyFilePath"
+
+                    if ($KeyFilePath) {
+                        # Get current ACL
+                        $Acl = Get-Acl -Path $KeyFilePath
+                        Write-Output "Current ACL:"
+                        Write-Output ($Acl.Access | Format-Table IdentityReference, FileSystemRights, AccessControlType -AutoSize | Out-String)
+
+                        # Create a new access rule for IIS_IUSRS
+                        $IisIusrs = New-Object System.Security.Principal.NTAccount("IIS_IUSRS")
+                        $AccessRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+                            $IisIusrs,
+                            "FullControl",
+                            "Allow"
+                        )
+
+                        # Add the access rule to the ACL
+                        $Acl.AddAccessRule($AccessRule)
+
+                        # Apply the modified ACL to the private key file
+                        Set-Acl -Path $KeyFilePath -AclObject $Acl
+
+                        # Verify the changes
+                        $UpdatedAcl = Get-Acl -Path $KeyFilePath
+                        Write-Output "Updated ACL:"
+                        Write-Output ($UpdatedAcl.Access | Format-Table IdentityReference, FileSystemRights, AccessControlType -AutoSize | Out-String)
+                        
+                        Write-Output "Successfully provided IIS_IUSRS with Full Control to the certificate's private key"
+                    } else {
+                        Write-Error "Private key file not found for the certificate with thumbprint $($CertificateThumbprint)"
+                        throw [System.Exception] "Private key file not found for the certificate with thumbprint $($CertificateThumbprint)"
+                    }
+
                     #- Import the IIS Administration module
                     Write-Verbose "Importing the IIS Administration module"
                     Import-Module IISAdministration -ErrorAction Stop
@@ -1304,12 +1348,112 @@ OID=1.3.6.1.5.5.7.3.1
                     }
                     Copy-Item -Path $AppSettingsFileBackup -Destination $AppSettingsFile -Force
                     $webAppSettings = Get-Content -Raw -Path $AppSettingsFile
-                    $webAppSettings = $webAppSettings.Replace('$SUBJECTNAME$', $CertificateSubjectName).Replace('$AGENTURL$', $URL).Replace('$APPINSIGHTS_CONNECTION_STRING$', $AppInsightsEndpoint)
+                    $webAppSettings = $webAppSettings.Replace('$SUBJECTNAME$', $CertificateSubjectName).Replace('$AGENTURL$', $URL).Replace('$APPINSIGHTS_CONNECTION_STRING$', $AppInsightsEndpoint).Replace('portal.ezca.io', 'eu.ezca.io')
+                    # If verbose logging is enabled then set the default logging level to Trace
+                    if ($VerbosePreference -eq 'Continue') {
+                        Write-Verbose "Since verbose logging is enabled, setting the default logging level to Trace in the appsettings.json file"
+                        $loggingSection = @"
+    "LogLevel": {
+        "Default": "Trace",
+        "Microsoft": "Trace",
+        "Microsoft.AspNetCore": "Trace",
+        "Microsoft.Hosting.Lifetime": "Trace",
+        "Microsoft.EntityFrameworkCore": "Trace",
+        "Microsoft.AspNetCore.Hosting.Diagnostics": "Trace",
+        "Microsoft.AspNetCore.Routing": "Trace",
+        "Microsoft.AspNetCore.Mvc": "Trace",
+        "Microsoft.AspNetCore.Mvc.ViewFeatures": "Trace",
+        "Microsoft.AspNetCore.Mvc.ViewFeatures.Filters": "Trace",
+        "Microsoft.AspNetCore.Mvc.ViewFeatures.Infrastructure": "Trace",
+        "Microsoft.AspNetCore.Mvc.ViewFeatures.Internal": "Trace",
+        "Microsoft.AspNetCore.Mvc.ViewFeatures.ViewFeatures": "Trace",
+        "Microsoft.AspNetCore.Mvc.ViewFeatures.ViewFeatures.Filters": "Trace",
+        "Microsoft.AspNetCore.Mvc.ViewFeatures.ViewFeatures.Infrastructure": "Trace",
+        "Microsoft.AspNetCore.Mvc.ViewFeatures.ViewFeatures.Internal": "Trace",
+        "ACMEAgent": "Trace",
+        "ACMEAgent.Controllers": "Trace",
+        "ACMEAgent.Controllers.HealthController": "Trace",
+        "ACMEAgent.Controllers.ACMEController": "Trace",
+        "ACMEAgent.Services": "Trace",
+        "ACMEAgent.Models": "Trace",
+        "ACMEAgent.Data": "Trace",
+        "ACMEAgent.Data.Repositories": "Trace",
+        "ACMEAgent.Data.Repositories.Impl": "Trace",
+        "ACMEAgent.Data.Repositories.Impl.EF": "Trace",
+        "ACMEAgent.Data.Repositories.Impl.EF.Contexts": "Trace",
+        "ACMEAgent.Data.Repositories.Impl.EF.Entities": "Trace",
+        "ACMEAgent.Data.Repositories.Impl.EF.Repositories": "Trace",
+        "Microsoft.AspNetCore.Routing.EndpointMiddleware": "Trace",
+        "Microsoft.AspNetCore.Routing.RouteEndpoint": "Trace",
+        "Microsoft.AspNetCore.Routing.RouteEndpointBuilder": "Trace",
+        "Microsoft.AspNetCore.Server.Kestrel": "Trace",
+        "Microsoft.AspNetCore.Server.Kestrel.Core": "Trace",
+        "Microsoft.AspNetCore.Server.Kestrel.Connections": "Trace",
+        "Microsoft.AspNetCore.Routing.Matching.DfaMatcher": "Trace",
+        "Microsoft.AspNetCore.Routing.Matching.DfaMatcherBuilder": "Trace",
+        "Microsoft.AspNetCore.Routing.Matching.DfaNode": "Trace",
+        "Microsoft.AspNetCore.Routing.Matching.DfaNodeBuilder": "Trace",
+        "Microsoft.AspNetCore.Routing.Matching.DfaNodeFactory": "Trace",
+        "Microsoft.AspNetCore.Routing.Matching.DfaNodeFactoryBuilder": "Trace",
+        "Microsoft.AspNetCore.Routing.Matching.DfaNodeFactoryBuilder.NodeFactory": "Trace",
+        "Microsoft.AspNetCore.Routing.Matching.DfaNodeFactoryBuilder.NodeFactoryBuilder": "Trace",
+        "Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware": "Trace",
+        "Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware.EndpointSelector": "Trace",
+        "Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware.EndpointSelectorBuilder": "Trace"
+    }
+"@
+                        # Replace the existing Logging section in the appsettings.json file with the new logging section
+                        $webAppSettings = $webAppSettings -replace '(?s)    "LogLevel": \{.*?\}', $loggingSection
+                        $webAppSettings = $webAppSettings.Replace('"Default": "Information"', '"Default": "Trace"').Replace('"Microsoft.AspNetCore": "Warning"', '"Microsoft.AspNetCore": "Trace"')
+                        Write-Verbose "Since verbose logging is enabled, enabling stdout logging for the aspnet core application in the web.config file"
+                        $webConfigFile = "$IISrootDirectoryPath\web.config"
+                        $webConfigContent = Get-Content -Raw -Path $webConfigFile
+                        $webConfigContent = $webConfigContent.Replace('stdoutLogEnabled="false"', 'stdoutLogEnabled="true"')
+                        Set-Content -Path $webConfigFile -Value $webConfigContent
+                        # Make sure the logs directory exists and is writable for the IISUSRS group
+                        Write-Verbose "Ensuring the logs directory exists and is writable for the IISUSRS group"
+                        if (-not (Test-Path -Path "$IISrootDirectoryPath\logs")) {
+                            New-Item -Path "$IISrootDirectoryPath\logs" -ItemType Directory -Force | Out-Null
+                        }
+                        $accessRule = New-Object System.Security.AccessControl.FileSystemAccessRule("IIS_IUSRS", "FullControl", "ContainerInherit,ObjectInherit", "None", "Allow")
+                        $acl = Get-ACL "$IISrootDirectoryPath\logs"
+                        $acl.AddAccessRule($accessRule)
+                        Set-ACL -Path "$IISrootDirectoryPath\logs" -ACLObject $acl
+                    }
                     $webAppSettings | Out-File -FilePath $AppSettingsFile -Force
                     Write-Verbose "Successfully updated the appsettings.json file"
                     Write-Verbose (Get-Content -Path $AppSettingsFile | Out-String)
 
                     Stop-IISCommitDelay # Commit the IIS changes
+
+                    # Add app pool identity to Cryptographic Operators group
+                    Write-Verbose "Adding the Application Pool identity ($IISAppPoolName) to the Cryptographic Operators group"
+                    # Add app pool identity to Cryptographic Operators group
+                    # Get the local group
+                    $localGroup = [ADSI]"WinNT://./Cryptographic Operators,group"
+                    # Add NETWORK SERVICE (used by many IIS app pools)
+                    try {
+                        $localGroup.Add("WinNT://NT AUTHORITY/NETWORK SERVICE")
+                        Write-Verbose "Added NETWORK SERVICE to Cryptographic Operators group"
+                    } catch {
+                        Write-Verbose "NETWORK SERVICE may already be a member or couldn't be added: $_"
+                    }
+                    # Add the specific app pool identity - note the correct format
+                    try {
+                        # The correct format uses forward slashes and no backslash
+                        $localGroup.Add("WinNT://NT AUTHORITY/IUSR")
+                        Write-Verbose "Added IUSR to Cryptographic Operators group"
+                    } catch {
+                        Write-Verbose "IUSR may already be a member or couldn't be added: $_"
+                    }
+                    try {
+                        # For application pool identity, format is different
+                        $appPoolAccount = "IIS APPPOOL/$IISAppPoolName"
+                        $localGroup.Add("WinNT://./$appPoolAccount")
+                        Write-Verbose "Added $appPoolAccount to Cryptographic Operators group"
+                    } catch {
+                        Write-Verbose "App pool identity may already be a member or couldn't be added: $_"
+                    }
 
                     # Make sure the Application Pool is recycled to avoid temporary connection issues
                     Write-Verbose "Verifying if we need to recycle the application pool ($IISAppPoolName)"
