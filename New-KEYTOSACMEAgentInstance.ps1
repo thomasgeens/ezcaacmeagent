@@ -154,8 +154,8 @@ function New-KEYTOSACMEAgentInstance {
         [Parameter(Mandatory = $false, Position = 11, HelpMessage = 'List of domain suffixes for DNS search list. Example: @("example.com", "corp.contoso.com")')]
         [string[]]$DNSSearchList,
 
-        [Parameter(Mandatory = $false, Position = 12, HelpMessage = 'The URL of the ACME Agent instance, in case omitted will be set to `https://{CertificateSubjectName}`.')]
-        [string]$URL = "https://$CertificateSubjectName",
+        [Parameter(Mandatory = $false, Position = 12, HelpMessage = 'The URL of the ACME Agent instance, in case omitted will be set to `https://{CertificateSubjectName}/`.')]
+        [string]$URL = "https://$CertificateSubjectName/",
 
         [Parameter(Mandatory = $false, Position = 13, HelpMessage = 'The URL to download the WebDeploy MSI installer. Default is `https://download.microsoft.com/download/b/d/8/bd882ec4-12e0-481a-9b32-0fae8e3c0b78/webdeploy_amd64_en-US.msi`.')]
         [string]$WebDeployDownloadURL = 'https://download.microsoft.com/download/b/d/8/bd882ec4-12e0-481a-9b32-0fae8e3c0b78/webdeploy_amd64_en-US.msi',
@@ -223,6 +223,8 @@ function New-KEYTOSACMEAgentInstance {
         $IISrootDirectoryPath = "$Env:SystemDrive\inetpub\ezcaacmeroot"
         $ACMEAgentDownloadPath = "$TemporaryDirectoryPath\ACMEAgent.zip"
         $ServiceMonitorExecutablePath = "$Env:SystemDrive\SystemMonitor.exe"
+        $FriendlyName = if ($FriendlyName) { $FriendlyName } else { $CertificateSubjectName }
+        $URL = if ($URL) { $URL } else { "https://$CertificateSubjectName/" }
         #endregion
 
         function New-FileDownload {
@@ -1348,7 +1350,10 @@ OID=1.3.6.1.5.5.7.3.1
                     }
                     Copy-Item -Path $AppSettingsFileBackup -Destination $AppSettingsFile -Force
                     $webAppSettings = Get-Content -Raw -Path $AppSettingsFile
-                    $webAppSettings = $webAppSettings.Replace('$SUBJECTNAME$', $CertificateSubjectName).Replace('$AGENTURL$', $URL).Replace('$APPINSIGHTS_CONNECTION_STRING$', $AppInsightsEndpoint).Replace('portal.ezca.io', 'eu.ezca.io')
+                    $webAppSettings = $webAppSettings.Replace('$SUBJECTNAME$', $CertificateSubjectName)
+                    $webAppSettings = $webAppSettings.Replace('$AGENTURL$', $URL)
+                    $webAppSettings = $webAppSettings.Replace('$APPINSIGHTS_CONNECTION_STRING$', $AppInsightsEndpoint)
+                    $webAppSettings = $webAppSettings.Replace('portal.ezca.io', 'eu.ezca.io')
                     # If verbose logging is enabled then set the default logging level to Trace
                     if ($VerbosePreference -eq 'Continue') {
                         Write-Verbose "Since verbose logging is enabled, setting the default logging level to Trace in the appsettings.json file"
@@ -1404,7 +1409,6 @@ OID=1.3.6.1.5.5.7.3.1
 "@
                         # Replace the existing Logging section in the appsettings.json file with the new logging section
                         $webAppSettings = $webAppSettings -replace '(?s)    "LogLevel": \{.*?\}', $loggingSection
-                        $webAppSettings = $webAppSettings.Replace('"Default": "Information"', '"Default": "Trace"').Replace('"Microsoft.AspNetCore": "Warning"', '"Microsoft.AspNetCore": "Trace"')
                         Write-Verbose "Since verbose logging is enabled, enabling stdout logging for the aspnet core application in the web.config file"
                         $webConfigFile = "$IISrootDirectoryPath\web.config"
                         $webConfigContent = Get-Content -Raw -Path $webConfigFile
