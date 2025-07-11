@@ -1,75 +1,116 @@
 <#
 .SYNOPSIS
     Creates a new KEYTOS ACME Agent instance.
- 
+
 .DESCRIPTION
     This script provisions a new KEYTOS ACME Agent instance by performing various tasks such as authentication, downloading and installing necessary components, creating a certificate signing request, and configuring IIS.
- 
+
 .PARAMETER TenantId
     The tenant ID of the Azure AD tenant. Can be in the form of `tenant.onmicrosoft.com` or the GUID.
 
 .PARAMETER CAFriendlyName
     The friendly name of the Issuing Intermediate SSL CA to be selected from the Issuing CA list. If omitted, the first CA in the list will be selected.
- 
+
 .PARAMETER CertificateSubjectName
     The subject name for the authentication certificate that will be used to authenticate with EZCA.
- 
+
 .PARAMETER AuthenticationType
-    The authentication type to be used. Can be one of the following `Identity`, `UseDeviceCode` or `Interactive`. Default is `Identity`.
- 
+    The authentication type to be used. Can be one of the following: `Identity`, `UseDeviceCode`, `Interactive`, `ServicePrincipalSecret`, or `ServicePrincipalCertificate`. Default is `Identity`.
+    - Identity: Uses the managed identity of the system.
+    - UseDeviceCode: Uses device code authentication flow.
+    - Interactive: Uses interactive authentication flow.
+    - ServicePrincipalSecret: Uses service principal authentication with client ID and secret via the `ClientId` and `ClientSecret` parameters.
+    - ServicePrincipalCertificate: Uses service principal authentication with client ID and certificate via one of the `CertificateThumbprint` or `CertificateBase64` parameters.
+
+.PARAMETER ClientId
+    The Application (client) ID of the service principal to use for authentication. Required when AuthenticationType is `ServicePrincipalSecret` or `ServicePrincipalCertificate`.
+
+.PARAMETER ClientSecret
+    The client secret of the service principal to use for authentication. Required when AuthenticationType is `ServicePrincipalSecret`.
+
+.PARAMETER CertificateThumbprint
+    The certificate thumbprint to use for service principal authentication. The certificate must be in the LocalMachine certificate store. Required when AuthenticationType is `ServicePrincipalCertificate` unless CertificateBase64 is provided.
+
+.PARAMETER CertificateBase64
+    The Base64 encoded certificate in PFX/PKCS#12 format (without password protection) to use for service principal authentication, provided as a SecureString. This should be the base64-encoded binary representation of the PFX file (not a PEM format with headers). The certificate will be imported into the certificate store. Can be used instead of CertificateThumbprint when AuthenticationType is `ServicePrincipalCertificate`.
+
 .PARAMETER FriendlyName
     The friendly name of the ACME agent instance. If omitted, it will be set to the Certificate Subject Name.
- 
+
 .PARAMETER AutomaticHealthChecks
     Switch to activate the EZCA managed health checks of the ACME Agent instance. Default is $false.
- 
+
 .PARAMETER URL
     The URL of the ACME Agent instance. If omitted, it will be set to `https://{CertificateSubjectName}`.
- 
+
+.PARAMETER DNSServers
+    List of DNS servers to configure on the system. Example: @("8.8.8.8", "8.8.4.4")
+
+.PARAMETER DNSSearchList
+    List of domain suffixes for DNS search list. Example: @("example.com", "corp.contoso.com")
+
 .PARAMETER WebDeployDownloadURL
     The URL to download the WebDeploy MSI installer. Default is `https://download.microsoft.com/download/b/d/8/bd882ec4-12e0-481a-9b32-0fae8e3c0b78/webdeploy_amd64_en-US.msi`.
- 
+
 .PARAMETER ASPNetCoreRuntimeDownloadURL
     The URL to download the ASP.NET Core Runtime installer. Default is `https://aka.ms/dotnet/9.0/daily/dotnet-hosting-win.exe`. Updated links can be found at `https://github.com/dotnet/aspnetcore`.
 
 .PARAMETER ServiceMonitorDownloadURL
     The URL to download the Service Monitor executable. Default is `https://dotnetbinaries.blob.core.windows.net/servicemonitor/2.0.1.10/ServiceMonitor.exe`. Updated links can be found at `https://github.com/microsoft/IIS.ServiceMonitor`.
- 
+
 .PARAMETER AppInsightsEndpoint
     The endpoint of the Application Insights instance.
- 
+
 .PARAMETER ACMEAgentDownloadURL
     The URL to download the ACME Agent ZIP file. Default is `https://download.keytos.io/Downloads/EZCAACME/ACMEAgent.zip`.
-  
+
 .PARAMETER AutoReplace
     Switch to enable or disable the automatic replacement of an existing ACME Agent instance. Default is $false.
 
 .PARAMETER ModuleList
-    List of modules to be installed. Default is `Az.Accounts` module with version `4.0.2` and maximum version `4.0.99999`. Using the NuGet package provider with version `2.8.5.201` and maximum version `2.8.5.999`.
+    List of modules to be installed. Default is `Az.Accounts` module with version `5.1.0` and maximum version `5.9.99999`. Using the NuGet package provider with version `2.8.5.208` and maximum version `2.8.5.999`.
     @(
         @{
             ModuleName      = 'Az.Accounts'
-            ModuleVersion   = [version] '4.0.2'
-            MaximumVersion  = [version] '4.0.99999'
+            ModuleVersion   = [version] '5.1.0'
+            MaximumVersion  = [version] '5.9.99999'
             PackageProvider = @{
                 Name           = 'NuGet'
-                Version        = [version] '2.8.5.201'
+                Version        = [version] '2.8.5.208'
                 MaximumVersion = [version] '2.8.5.999'
             }
         }
     )
- 
+
 .PARAMETER Stages
-    Stages to run: `Build`, `Deploy`, `Cleanup`, `HealthCheck`, `ServiceMonitor`. Default is all stages `Build, Deploy, Cleanup, HealthCheck, ServiceMonitor`.
-    Build - Installs the required PowerShell package providers and modules, IIS role, Web Deploy MSI package, and ASP.NET Core Runtime and the ACME Agent files.
+    Stages to run: `Build`, `Deploy`, `Cleanup`, `HealthCheck`, `ServiceMonitor`. Default is all stages `Build, Deploy, Cleanup, HealthCheck, ServiceMonitor`.    Build - Installs the required PowerShell package providers and modules, IIS role, Web Deploy MSI package, and ASP.NET Core Runtime and the ACME Agent files.
     Deploy - Authenticates to AzureAD SDK and KEYTOS EZCA, (re-)registers the ACME Agent instance, and verifies and renews the agent's certificate.
     Cleanup - Cleans up the temporary files and directories.
     HealthCheck - Verifies the health of the ACME Agent instance and the certificate.
 
 .EXAMPLE
     New-KEYTOSACMEAgentInstance -TenantId 'tenant.onmicrosoft.com' -CertificateSubjectName 'example.com' -FriendlyName 'Example' -AuthenticationType 'Interactive' -Cleanup -AutoReplace
+
+.EXAMPLE
+    New-KEYTOSACMEAgentInstance -TenantId 'tenant.onmicrosoft.com' -CertificateSubjectName 'example.com' -DNSServers @("8.8.8.8", "8.8.4.4") -DNSSearchList @("example.com", "corp.contoso.com")
+
+.EXAMPLE
+    # Using service principal authentication with a certificate provided in Base64/PEM format
+    $certPath = "path\to\certificate_key.pem"
+    $certContent = Get-Content -Path $certPath -Raw
+    $secureCert = ConvertTo-SecureString -String $certContent -AsPlainText -Force
+    New-KEYTOSACMEAgentInstance -TenantId 'tenant.onmicrosoft.com' -CertificateSubjectName 'example.com' -AuthenticationType 'ServicePrincipalCertificate' -ClientId 'application-id' -CertificateBase64 $secureCert
+
+.EXAMPLE
+    # Using service principal authentication with a certificate provided via an multiline environment variable in Base64/PEM format
+    $Env:AA_CertificateBase64 = @"-----BEGIN CERTIFICATE-----
+    MIID...
+    -----END CERTIFICATE-----"@
+    $secureCert = ConvertTo-SecureString -String $Env:AA_CertificateBase64 -AsPlainText -Force
+    New-KEYTOSACMEAgentInstance -TenantId 'tenant.onmicrosoft.com' -CertificateSubjectName 'example.com' -AuthenticationType 'ServicePrincipalCertificate' -ClientId 'application-id' -CertificateBase64 $secureCert
+
 #>
- 
+
 function New-KEYTOSACMEAgentInstance {
     [CmdletBinding(SupportsShouldProcess)]
     param (
@@ -81,58 +122,76 @@ function New-KEYTOSACMEAgentInstance {
 
         [Parameter(Mandatory = $false, Position = 1, HelpMessage = 'The friendly name of the Issuing Intermediate SSL CA to be selected from the Issuing CA list. If omitted, the first CA in the list will be selected.')]
         [string]$CAFriendlyName,
- 
+
         [Parameter(Mandatory = $true, Position = 2, HelpMessage = 'The subject name for the authentication certificate that will be used to authenticate with EZCA.')]
         [string]$CertificateSubjectName,
- 
-        [Parameter(Mandatory = $false, Position = 3, HelpMessage = 'The authentication type to be used. Default is `Identity`.')]
-        [ValidateSet('Identity', 'UseDeviceCode', 'Interactive')]
+
+        [Parameter(Mandatory = $false, Position = 3, HelpMessage = 'The authentication type to be used. Default is `Identity`. Service principal authentication can be done via ClientSecret or Certificate.')]
+        [ValidateSet('Identity', 'UseDeviceCode', 'Interactive', 'ServicePrincipalSecret', 'ServicePrincipalCertificate')]
         [string]$AuthenticationType = 'Identity',
- 
-        [Parameter(Mandatory = $false, Position = 4, HelpMessage = 'The friendly name of the ACME agent instance, in case omitted will be set to the Certificate Subject Name.')]
+
+        [Parameter(Mandatory = $false, Position = 4, HelpMessage = 'The Application (client) ID of the service principal to use for authentication. Required when AuthenticationType is ServicePrincipalSecret or ServicePrincipalCertificate.')]
+        [string]$ClientId,
+
+        [Parameter(Mandatory = $false, Position = 5, HelpMessage = 'The client secret of the service principal to use for authentication. Required when AuthenticationType is ServicePrincipalSecret.')]
+        [SecureString]$ClientSecret,
+
+        [Parameter(Mandatory = $false, Position = 6, HelpMessage = 'The certificate thumbprint to use for service principal authentication. The certificate must be in the LocalMachine certificate store. Required when AuthenticationType is ServicePrincipalCertificate unless CertificateBase64 is provided.')]
+        [string]$CertificateThumbprint,
+
+        [Parameter(Mandatory = $false, Position = 7, HelpMessage = 'The Base64 encoded certificate in PFX/PKCS#12 format (without password protection) to use for service principal authentication as a SecureString. The certificate will be imported into the certificate store. Can be used instead of CertificateThumbprint when AuthenticationType is ServicePrincipalCertificate.')]
+        [SecureString]$CertificateBase64,
+
+        [Parameter(Mandatory = $false, Position = 8, HelpMessage = 'The friendly name of the ACME agent instance, in case omitted will be set to the Certificate Subject Name.')]
         [string]$FriendlyName = $CertificateSubjectName,
- 
-        [Parameter(Mandatory = $false, Position = 5, HelpMessage = 'Switch to activate the EZCA managed health checks of the ACME Agent instance. Default is $false.')]
+
+        [Parameter(Mandatory = $false, Position = 9, HelpMessage = 'Switch to activate the EZCA managed health checks of the ACME Agent instance. Default is $false.')]
         [switch]$AutomaticHealthChecks,
- 
-        [Parameter(Mandatory = $false, Position = 6, HelpMessage = 'The URL of the ACME Agent instance, in case omitted will be set to `https://{CertificateSubjectName}`.')]
-        [string]$URL = "https://$CertificateSubjectName",
- 
-        [Parameter(Mandatory = $false, Position = 7, HelpMessage = 'The URL to download the WebDeploy MSI installer. Default is `https://download.microsoft.com/download/b/d/8/bd882ec4-12e0-481a-9b32-0fae8e3c0b78/webdeploy_amd64_en-US.msi`.')]
+
+        [Parameter(Mandatory = $false, Position = 10, HelpMessage = 'List of DNS servers to configure on the system. Example: @("8.8.8.8", "8.8.4.4")')]
+        [string[]]$DNSServers,
+
+        [Parameter(Mandatory = $false, Position = 11, HelpMessage = 'List of domain suffixes for DNS search list. Example: @("example.com", "corp.contoso.com")')]
+        [string[]]$DNSSearchList,
+
+        [Parameter(Mandatory = $false, Position = 12, HelpMessage = 'The URL of the ACME Agent instance, in case omitted will be set to `https://{CertificateSubjectName}/`.')]
+        [string]$URL = "https://$CertificateSubjectName/",
+
+        [Parameter(Mandatory = $false, Position = 13, HelpMessage = 'The URL to download the WebDeploy MSI installer. Default is `https://download.microsoft.com/download/b/d/8/bd882ec4-12e0-481a-9b32-0fae8e3c0b78/webdeploy_amd64_en-US.msi`.')]
         [string]$WebDeployDownloadURL = 'https://download.microsoft.com/download/b/d/8/bd882ec4-12e0-481a-9b32-0fae8e3c0b78/webdeploy_amd64_en-US.msi',
- 
-        [Parameter(Mandatory = $false, Position = 8, HelpMessage = 'The URL to download the ASP.NET Core Runtime installer. Default is `https://aka.ms/dotnet/9.0/daily/dotnet-hosting-win.exe`. Updated links can be found at `https://github.com/dotnet/aspnetcore`.')]
+
+        [Parameter(Mandatory = $false, Position = 14, HelpMessage = 'The URL to download the ASP.NET Core Runtime installer. Default is `https://aka.ms/dotnet/9.0/daily/dotnet-hosting-win.exe`. Updated links can be found at `https://github.com/dotnet/aspnetcore`.')]
         [string]$ASPNetCoreRuntimeDownloadURL = 'https://aka.ms/dotnet/9.0/daily/dotnet-hosting-win.exe',
- 
-        [Parameter(Mandatory = $false, Position = 9, HelpMessage = 'The URL to download the Service Monitor executable. Default is `https://dotnetbinaries.blob.core.windows.net/servicemonitor/2.0.1.10/ServiceMonitor.exe`.')]
+
+        [Parameter(Mandatory = $false, Position = 15, HelpMessage = 'The URL to download the Service Monitor executable. Default is `https://dotnetbinaries.blob.core.windows.net/servicemonitor/2.0.1.10/ServiceMonitor.exe`.')]
         [string]$ServiceMonitorDownloadURL = 'https://dotnetbinaries.blob.core.windows.net/servicemonitor/2.0.1.10/ServiceMonitor.exe',
- 
-        [Parameter(Mandatory = $false, Position = 10, HelpMessage = 'The endpoint of the Application Insights instance.')]
+
+        [Parameter(Mandatory = $false, Position = 16, HelpMessage = 'The endpoint of the Application Insights instance.')]
         [string]$AppInsightsEndpoint,
- 
-        [Parameter(Mandatory = $false, Position = 11, HelpMessage = 'The URL to download the ACME Agent ZIP file. Default is `https://download.keytos.io/Downloads/EZCAACME/ACMEAgent.zip`.')]
+
+        [Parameter(Mandatory = $false, Position = 17, HelpMessage = 'The URL to download the ACME Agent ZIP file. Default is `https://download.keytos.io/Downloads/EZCAACME/ACMEAgent.zip`.')]
         [string]$ACMEAgentDownloadURL = 'https://download.keytos.io/Downloads/EZCAACME/ACMEAgent.zip',
- 
-        [Parameter(Mandatory = $false, Position = 12, HelpMessage = 'Switch to enable or disable the automatic replacement of an existing ACME Agent instance. Default is $false.')]
+
+        [Parameter(Mandatory = $false, Position = 18, HelpMessage = 'Switch to enable or disable the automatic replacement of an existing ACME Agent instance. Default is $false.')]
         [switch]$AutoReplace,
 
-        [Parameter(Mandatory = $false, Position = 13, HelpMessage = 'Module list to be used with correlating package providers. Default is `@( @{ ModuleName = ''Az.Accounts'', ModuleVersion = [version] ''4.0.2'', MaximumVersion  = [version] ''4.0.99999'', PackageProvider = @{ Name = ''NuGet'', Version = [version] ''2.8.5.201'', MaximumVersion = [version] ''2.8.5.999'' } } )`.')]
+        [Parameter(Mandatory = $false, Position = 19, HelpMessage = 'Module list to be used with correlating package providers. Default is `@( @{ ModuleName = ''Az.Accounts'', ModuleVersion = [version] ''5.1.0'', MaximumVersion  = [version] ''5.9.99999'', PackageProvider = @{ Name = ''NuGet'', Version = [version] ''2.8.5.208'', MaximumVersion = [version] ''2.8.5.999'' } } )`.')]
         [ValidateNotNullOrEmpty()]
         [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', 'ModuleList')]
         [Object[]]$ModuleList = @(
             @{
                 ModuleName      = 'Az.Accounts'
-                ModuleVersion   = [version] '4.0.2'
-                MaximumVersion  = [version] '4.0.99999'
+                ModuleVersion   = [version] '5.2.0'
+                MaximumVersion  = [version] '5.9.99999'
                 PackageProvider = @{
                     Name           = 'NuGet'
-                    Version        = [version] '2.8.5.201'
+                    Version        = [version] '2.8.5.208'
                     MaximumVersion = [version] '2.8.5.999'
                 }
             }
         ),
 
-        [Parameter(Mandatory = $false, Position = 14, HelpMessage = 'Stages to run: `Build`, `Deploy`, `Cleanup`, `HealthCheck`, `ServiceMonitor`. Default is all stages `Build, Deploy, Cleanup, HealthCheck, ServiceMonitor)`.')]
+        [Parameter(Mandatory = $false, Position = 20, HelpMessage = 'Stages to run: `Build`, `Deploy`, `Cleanup`, `HealthCheck`, `ServiceMonitor`. Default is all stages `Build, Deploy, Cleanup, HealthCheck, ServiceMonitor)`.')]
         [ValidateSet('Build', 'Deploy', 'Cleanup', 'HealthCheck', 'ServiceMonitor')]
         [string[]]$Stages = @('Build', 'Deploy', 'Cleanup', 'HealthCheck', 'ServiceMonitor')
 
@@ -142,10 +201,10 @@ function New-KEYTOSACMEAgentInstance {
         $ExecutionStartTime = Get-Date
         Write-Verbose "Beginning $($MyInvocation.Mycommand) at $ExecutionStartTime"
     }
- 
+
     PROCESS {
         Write-Verbose "Processing $($MyInvocation.Mycommand)"
- 
+
         #region Variables
         $TemporaryDirectoryPath = "$Env:SystemDrive\Temp"
         $WebDeployMSIPath = "$TemporaryDirectoryPath\WebDeploy.msi"
@@ -164,6 +223,8 @@ function New-KEYTOSACMEAgentInstance {
         $IISrootDirectoryPath = "$Env:SystemDrive\inetpub\ezcaacmeroot"
         $ACMEAgentDownloadPath = "$TemporaryDirectoryPath\ACMEAgent.zip"
         $ServiceMonitorExecutablePath = "$Env:SystemDrive\SystemMonitor.exe"
+        $FriendlyName = if ($FriendlyName) { $FriendlyName } else { $CertificateSubjectName }
+        $URL = if ($URL) { $URL } else { "https://$CertificateSubjectName/" }
         #endregion
 
         function New-FileDownload {
@@ -179,43 +240,45 @@ function New-KEYTOSACMEAgentInstance {
                 Write-Verbose "Downloading file from $Url to $DestinationPath"
                 Invoke-WebRequest -Uri $Url -OutFile $DestinationPath -UseBasicParsing -ErrorAction Stop
                 Write-Verbose "Successfully downloaded file to $DestinationPath"
-            } catch {
+            }
+            catch {
                 throw [System.Exception] "Failed to download file from $($Url): $($_.Exception.Message)"
-            } finally {
+            }
+            finally {
                 $ProgressPreference = $currentProgressPreference # Restore progress preference
             }
         }
- 
+
         try {
-            
+
             #region Docker Build Stage
             if ($Stages -contains 'Build') {
                 if ($PSCmdlet.ShouldProcess('Docker Build Stage', 'Install')) {
                     Write-Verbose "### Docker Build Stage ####"
-                    
+
                     # Make sure the temporary directory exists
                     Write-Verbose "Verifying the temporary directory exists at $TemporaryDirectoryPath"
                     if (-not (Test-Path $TemporaryDirectoryPath -PathType Container)) {
                         Write-Verbose "Creating the temporary directory"
                         New-Item -Path $TemporaryDirectoryPath -ItemType Directory -Force
                     }
-        
+
                     if ($PSCmdlet.ShouldProcess('Required modules', 'Install')) {
                         Write-Verbose "Installing the required modules for $($MyInvocation.Mycommand)"
                         # [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', 'ModuleList')]
                         # $ModuleList = @(
                         #     @{
                         #         ModuleName      = 'Az.Accounts'
-                        #         ModuleVersion   = [version] '4.0.2'
-                        #         MaximumVersion  = [version] '4.0.99999'
+                        #         ModuleVersion   = [version] '5.1.0'
+                        #         MaximumVersion  = [version] '5.9.99999'
                         #         PackageProvider = @{
                         #             Name           = 'NuGet'
-                        #             Version        = [version] '2.8.5.201'
+                        #             Version        = [version] '2.8.5.208'
                         #             MaximumVersion = [version] '2.8.5.999'
                         #         }
                         #     }
                         # )
-        
+
                         foreach ($Module in $ModuleList) {
                             Write-Verbose "Checking if module $($Module.ModuleName) is installed"
                             $InstalledModuleVersions = @(
@@ -223,7 +286,7 @@ function New-KEYTOSACMEAgentInstance {
                                 Get-Module -Name $($Module.ModuleName) -ErrorAction SilentlyContinue
                             )
                             $FoundAcceptableVersion = $false
-        
+
                             foreach ($ModuleVersion in $InstalledModuleVersions) {
                                 if (($ModuleVersion.Version -ge $Module.ModuleVersion) -and ($ModuleVersion.Version -le $Module.MaximumVersion)) {
                                     Write-Verbose "Found acceptable version $($ModuleVersion.Version) of module $($Module.ModuleName)"
@@ -234,13 +297,14 @@ function New-KEYTOSACMEAgentInstance {
                                         Import-Module $Module.ModuleName -MinimumVersion $Module.ModuleVersion -MaximumVersion $Module.MaximumVersion -ErrorAction 'Stop'
                                         Write-Verbose "Module $($Module.ModuleName) version $($ModuleVersion.Version) is imported"
                                         break;
-                                    } else {
+                                    }
+                                    else {
                                         Write-Verbose "Module $($Module.ModuleName) version $($ModuleVersion.Version) is already imported"
                                         break;
                                     }
                                 }
                             }
-        
+
                             if (-not $FoundAcceptableVersion) {
                                 if ($Module.PackageProvider) {
                                     Write-Verbose "Checking if package provider $($Module.PackageProvider.Name) is installed"
@@ -249,7 +313,8 @@ function New-KEYTOSACMEAgentInstance {
                                         Write-Verbose "Package provider $($Module.PackageProvider.Name) version $($Module.PackageProvider.Version) is not installed"
                                         Write-Verbose "Installing package provider $($Module.PackageProvider.Name) version $($Module.PackageProvider.Version)"
                                         Install-PackageProvider -Name "$($Module.PackageProvider.Name)" -MinimumVersion $Module.PackageProvider.Version -MaximumVersion $Module.PackageProvider.MaximumVersion -Force -ErrorAction 'Stop'
-                                    } else {
+                                    }
+                                    else {
                                         foreach ($PackageProviderVersion in $InstalledPackageProviderVersion) {
                                             if (($PackageProviderVersion.Version -ge $Module.PackageProvider.Version) -and ($PackageProviderVersion.Version -le $Module.PackageProvider.MaximumVersion)) {
                                                 Write-Verbose "Found acceptable version $($PackageProviderVersion.Version) of package provider $($Module.PackageProvider.Name)"
@@ -288,11 +353,12 @@ function New-KEYTOSACMEAgentInstance {
                         Write-Verbose "The IIS role will be installed"
                         Install-WindowsFeature -name Web-Server -IncludeManagementTools
                         Write-Verbose "Successfully installed the IIS role"
-                    } else {
+                    }
+                    else {
                         Write-Verbose "The IIS role was already installed, we'll assume the Web Deploy role is also installed and we'll skip its installation!"
                         $SkipWebDeployInstallation = $true
                     }
-        
+
                     # Verify if the "Default Web Site" exists and if so remove it
                     Write-Verbose "Verifying if the IIS site 'Default Web Site' still exists"
                     $DefaultWebSite = Get-Website -Name 'Default Web Site' -ErrorAction SilentlyContinue
@@ -300,11 +366,12 @@ function New-KEYTOSACMEAgentInstance {
                         Write-Verbose "The IIS site 'Default Web Site' exists and will be removed"
                         Remove-IISSite -Name 'Default Web Site' -Confirm:$false -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
                         Write-Verbose "Successfully removed the IIS site 'Default Web Site'"
-                    } else {
+                    }
+                    else {
                         Write-Verbose "The 'Default Web Site' does not exist, existing IIS sites:"
                         Write-Verbose "$(Get-IISSite | Format-Table | Out-String)"
                     }
-        
+
                     # Download the Web Deploy MSI package
                     if (-not $SkipWebDeployInstallation) {
                         # See IIS role installation above
@@ -314,7 +381,8 @@ function New-KEYTOSACMEAgentInstance {
                             if ($WebDeployInstalled) {
                                 Write-Verbose "The Web Deploy MSI package has already been installed"
                                 Write-Verbose "$($WebDeployInstalled | Format-Table | Out-String)"
-                            } else {
+                            }
+                            else {
                                 Write-Verbose "Downloading the Web Deploy MSI package"
                                 New-FileDownload -Url $WebDeployDownloadURL -DestinationPath $WebDeployMSIPath
                                 Write-Verbose "Successfully downloaded the Web Deploy MSI package"
@@ -326,7 +394,8 @@ function New-KEYTOSACMEAgentInstance {
                                 if ($InstallWebDeployMSI.ExitCode -eq 0) {
                                     Write-Verbose "Successfully installed the Web Deploy MSI package"
                                     Write-Verbose (Get-Content -Path $WebDeployLogFile | Out-String)
-                                } else {
+                                }
+                                else {
                                     throw [System.Exception] "Failed to install the Web Deploy MSI package: $($InstallWebDeployMSI.ExitCode) - See $WebDeployLogFile for more details"
                                 }
                             }
@@ -340,7 +409,8 @@ function New-KEYTOSACMEAgentInstance {
                         if ($ASPNetCoreRuntimeInstalled) {
                             Write-Verbose "The ASP.NET Core Runtime has already been installed"
                             Write-Verbose "$($ASPNetCoreRuntimeInstalled | Format-Table | Out-String)"
-                        } else {
+                        }
+                        else {
                             # Download the ASP.NET Core Runtime
                             Write-Verbose "Downloading the ASP.NET Core Runtime"
                             New-FileDownload -Url $ASPNetCoreRuntimeDownloadURL -DestinationPath $ASPNetCoreRuntimePath
@@ -390,10 +460,11 @@ function New-KEYTOSACMEAgentInstance {
                         Write-Verbose (Get-Item -Path $ACMEAgentDownloadPath | Format-Table | Out-String)
                         Write-Verbose "Cleaning up the current ACME Agent's installation ($IISrootDirectoryPath)"
                         Remove-Item -Path "$IISrootDirectoryPath\*" -Recurse -Force -ErrorAction SilentlyContinue
-                    } else {
+                    }
+                    else {
                         Write-Verbose "The ACME Agent's installation file hosted was already downloaded"
                     }
-        
+
                     # Extract the ACME Agent
                     Write-Verbose "Extracting the ACME Agent"
                     Expand-Archive -LiteralPath $ACMEAgentDownloadPath -DestinationPath $IISrootDirectoryPath -Force -ErrorAction SilentlyContinue
@@ -415,19 +486,19 @@ function New-KEYTOSACMEAgentInstance {
                     if (Test-Path -Path $ServiceMonitorExecutablePath -PathType Leaf) {
                         Write-Verbose "The Service Monitor's executable is already downloaded"
                         Write-Verbose (Get-Item -Path $ServiceMonitorExecutablePath | Format-Table | Out-String)
-                    } else {
+                    }
+                    else {
                         New-FileDownload -Url $ServiceMonitorDownloadURL -DestinationPath $ServiceMonitorExecutablePath
                         Write-Verbose "Successfully downloaded the Service Monitor executable to $ServiceMonitorExecutablePath"
-                    }                   
+                    }
                 }
             }
             #endregion
- 
+
             #region ACME Agent Instance Setup Stage
             if ($Stages -contains 'Deploy') {
                 if ($PSCmdlet.ShouldProcess('ACME Agent Instance', 'Install')) {
                     Write-Verbose "### ACME Agent Instance Deploy Stage ####"
-
                     #region Authentication
                     if ($PSCmdlet.ShouldProcess('AzureAD SDK', 'Connect')) {
                         Write-Verbose "Authenticating to AzureAD SDK with Tenant ID: $($tenantId)"
@@ -442,10 +513,149 @@ function New-KEYTOSACMEAgentInstance {
                                 'UseDeviceCode' {
                                     Write-Verbose "Using Device Code Authentication"
                                     Connect-AzAccount -Environment AzureCloud -Tenant $tenantId -UseDeviceAuthentication
-                                } 'Interactive' {
+                                }
+                                'Interactive' {
                                     Write-Verbose "Using Interactive Authentication"
                                     Connect-AzAccount -Environment AzureCloud -Tenant $tenantId -InformationAction Ignore
-                                } default {
+                                }
+                                'ServicePrincipalSecret' {
+                                    Write-Verbose "Using Service Principal Authentication with Client Secret"
+                                    if ([string]::IsNullOrEmpty($ClientId)) {
+                                        throw [System.ArgumentException] "ClientId is required when using ServicePrincipalSecret authentication."
+                                    }
+                                    if ($null -eq $ClientSecret) {
+                                        throw [System.ArgumentException] "ClientSecret is required when using ServicePrincipalSecret authentication."
+                                    }
+                                    $credential = New-Object System.Management.Automation.PSCredential ($ClientId, $ClientSecret)
+                                    Connect-AzAccount -Environment AzureCloud -Tenant $tenantId -ServicePrincipal -Credential $credential
+                                } 
+                                'ServicePrincipalCertificate' {
+                                    Write-Verbose "Using Service Principal Authentication with Certificate"
+                                    if ([string]::IsNullOrEmpty($ClientId)) {
+                                        throw [System.ArgumentException] "ClientId is required when using ServicePrincipalCertificate authentication."
+                                    }
+                                      # If we have base64 certificate data, import it to the store
+                                    if ($null -ne $CertificateBase64) {
+                                        Write-Verbose "Certificate provided in Base64 format, importing to certificate store..."
+                                        
+                                        # Convert SecureString to plain text for temporary processing
+                                        $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($CertificateBase64)
+                                        $certContent = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
+                                        [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+                                        
+                                        # Create a temporary certificate file
+                                        $certTempPath = "$TemporaryDirectoryPath\sp_auth_cert.pfx"
+                                        Write-Verbose "Creating temporary certificate file: $certTempPath"
+                                        
+                                        try {                                            # Convert base64 string to bytes and save as binary PFX file
+                                            # Check if the base64 string contains PEM headers and remove them
+                                            if ($certContent -match '-----BEGIN CERTIFICATE-----') {
+                                                Write-Verbose "Detected PEM format, removing headers..."
+                                                $certContent = $certContent -replace '-----BEGIN CERTIFICATE-----|-----END CERTIFICATE-----|-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|[\r\n]', ''
+                                            }
+                                            
+                                            $certBytes = [Convert]::FromBase64String($certContent)
+                                            [System.IO.File]::WriteAllBytes($certTempPath, $certBytes)
+                                            
+                                            Write-Verbose "Certificate data saved as binary PFX file"
+                                            
+                                            # Clear plaintext variables from memory
+                                            $certContent = $null
+                                            $certBytes = $null
+                                            [System.GC]::Collect()
+                                            
+                                            # Attempt to import using X509Certificate2 with various options
+                                            try {                                                
+                                                Write-Verbose "Attempting to import certificate with X509KeyStorageFlags options..."
+                                                # Try different combinations of flags for importing certificate
+                                                $importFlags = [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::PersistKeySet -bor 
+                                                              [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable -bor
+                                                              [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::MachineKeySet
+
+                                                # First try without password
+                                                try {
+                                                    $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($certTempPath, "", $importFlags)
+                                                }
+                                                catch {
+                                                    Write-Verbose "Import without password failed, trying with empty password: $($_.Exception.Message)"
+                                                    # Some versions of .NET require an empty string explicitly
+                                                    $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($certTempPath, [string]::Empty, $importFlags)
+                                                }
+                                                
+                                                # Add to certificate store
+                                                $store = New-Object System.Security.Cryptography.X509Certificates.X509Store("My", "LocalMachine")
+                                                $store.Open("ReadWrite")
+                                                $store.Add($cert)
+                                                $store.Close()
+                                                
+                                                # Set thumbprint from imported certificate
+                                                $CertificateThumbprint = $cert.Thumbprint
+                                                Write-Verbose "Certificate successfully imported with thumbprint: $CertificateThumbprint"
+                                            }
+                                            catch {
+                                                Write-Verbose "Standard import failed: $($_.Exception.Message)"
+                                                Write-Verbose "Trying alternative import method with certutil..."
+                                                
+                                                # Try using certutil as fallback - multiple options for better compatibility
+                                                try {
+                                                    # First try with no password
+                                                    Start-Process $CertUtilExecutablePath -ArgumentList "-f -p `"`" -importpfx `"$certTempPath`" NoRoot" -Wait -NoNewWindow -ErrorAction Stop
+                                                }
+                                                catch {
+                                                    Write-Verbose "First certutil attempt failed: $($_.Exception.Message)"
+                                                    # Try alternate syntax
+                                                    Start-Process $CertUtilExecutablePath -ArgumentList "-importpfx -p `"`" `"$certTempPath`"" -Wait -NoNewWindow -ErrorAction Stop
+                                                }
+                                                
+                                                # Get the certificate thumbprint - assume the most recently added cert is ours
+                                                $recentCerts = Get-ChildItem -Path "Cert:\LocalMachine\My" | Sort-Object -Property NotBefore -Descending | Select-Object -First 1
+                                                if ($recentCerts) {
+                                                    $CertificateThumbprint = $recentCerts.Thumbprint
+                                                    Write-Verbose "Certificate successfully imported with thumbprint: $CertificateThumbprint"
+                                                }
+                                                else {
+                                                    throw [System.Security.Cryptography.CryptographicException] "Failed to find imported certificate"
+                                                }
+                                            }
+                                        }
+                                        catch {
+                                            throw [System.Security.Cryptography.CryptographicException] "Failed to process or import certificate: $($_.Exception.Message)"
+                                        }
+                                        finally {
+                                            # Clean up the temporary file
+                                            if (Test-Path $certTempPath) {
+                                                Remove-Item -Path $certTempPath -Force -ErrorAction SilentlyContinue
+                                                Write-Verbose "Temporary certificate file removed"
+                                            }
+                                        }
+                                    }
+
+                                    # At this point we should have a thumbprint, either provided directly or from import
+                                    if ([string]::IsNullOrEmpty($CertificateThumbprint)) {
+                                        throw [System.ArgumentException] "Either CertificateThumbprint or CertificateBase64 is required when using ServicePrincipalCertificate authentication."
+                                    }
+
+                                    
+                                    Write-Verbose "Checking for certificate with thumbprint '$CertificateThumbprint' in the LocalMachine store..."
+                                    $certificate = Get-Item -Path "Cert:\LocalMachine\My\$CertificateThumbprint" -ErrorAction SilentlyContinue
+                                    if ($null -eq $certificate) {
+                                        throw [System.Security.Cryptography.CryptographicException] "Certificate with thumbprint '$CertificateThumbprint' not found in the LocalMachine certificate stores."
+                                    }
+
+                                    # Test programmatic access to the private key
+                                    if ($certificate) {
+                                        if ($certificate.HasPrivateKey -and
+                                            [String]::IsNullOrEmpty($certificate.PrivateKey))
+                                        {
+                                            throw [System.Security.Cryptography.CryptographicException] "This user does not have permissions to the private key for certificate with thumbprint '$CertificateThumbprint' in the LocalMachine certificate stores."
+                                        } else {
+                                            Write-Verbose "This user has permissions to the private key for certificate with thumbprint '$CertificateThumbprint' in the LocalMachine certificate stores."
+                                        }
+                                    }
+
+                                    Connect-AzAccount -Environment AzureCloud -Tenant $tenantId -ServicePrincipal -ApplicationId $ClientId -CertificateThumbprint $CertificateThumbprint
+                                }
+                                default {
                                     Write-Verbose "Using Identity Authentication"
                                     Connect-AzAccount -Environment AzureCloud -Tenant $tenantId -Identity
                                 }
@@ -461,8 +671,80 @@ function New-KEYTOSACMEAgentInstance {
                     $CurrentSubscription = Get-AzSubscription -SubscriptionId $CurrentContext.Subscription.Id
                     Write-Verbose "Successfully authenticated against AzureAD SDK as $($CurrentContext.Account.Id) ($($CurrentSubscription.Name))"
 
+                    #region Configure DNS Settings
+                    if ($PSCmdlet.ShouldProcess('DNS Settings', 'Configure')) {
+                        # Configure DNS Servers if provided
+                        if ($DNSServers -and $DNSServers.Count -gt 0) {
+                            Write-Verbose "Configuring DNS Servers: $($DNSServers -join ', ')"
+
+                            # Get all network adapters that are up
+                            $networkAdapters = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' }
+
+                            foreach ($adapter in $networkAdapters) {
+                                # Get current DNS server settings before making changes
+                                $currentDNSServers = (Get-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4).ServerAddresses
+                                Write-Verbose "Current DNS servers for adapter $($adapter.Name): $($currentDNSServers -join ', ')"
+
+                                Write-Verbose "Setting DNS servers for adapter: $($adapter.Name)"
+                                try {
+                                    # Set DNS servers for this adapter
+                                    Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -ServerAddresses $DNSServers
+
+                                    # Verify the new settings were applied
+                                    $newDNSServers = (Get-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4).ServerAddresses
+                                    Write-Verbose "New DNS servers for adapter $($adapter.Name): $($newDNSServers -join ', ')"
+                                    Write-Verbose "Successfully set DNS servers for adapter: $($adapter.Name)"
+                                }
+                                catch {
+                                    Write-Warning "Failed to set DNS servers for adapter $($adapter.Name): $($_.Exception.Message)"
+                                }
+                            }
+                            Write-Verbose "DNS Servers configuration completed"
+                        }
+                        else {
+                            # Display current DNS server settings even if we're not changing them
+                            $networkAdapters = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' }
+                            foreach ($adapter in $networkAdapters) {
+                                $currentDNSServers = (Get-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4).ServerAddresses
+                                Write-Verbose "Current DNS servers for adapter $($adapter.Name): $($currentDNSServers -join ', ')"
+                            }
+                            Write-Verbose "No DNS Servers provided, skipping DNS server configuration"
+                        }
+
+                        # Configure DNS Search List if provided
+                        if ($DNSSearchList -and $DNSSearchList.Count -gt 0) {
+                            # Get current DNS suffix search list before making changes
+                            $currentSearchList = (Get-DnsClientGlobalSetting).SuffixSearchList
+                            Write-Verbose "Current DNS suffix search list: $($currentSearchList -join ', ')"
+
+                            Write-Verbose "Configuring DNS Search List: $($DNSSearchList -join ', ')"
+
+                            try {
+                                # Set the DNS suffix search list for all adapters
+                                Set-DnsClientGlobalSetting -SuffixSearchList $DNSSearchList
+
+                                # Verify the new settings were applied
+                                $newSearchList = (Get-DnsClientGlobalSetting).SuffixSearchList
+                                Write-Verbose "New DNS suffix search list: $($newSearchList -join ', ')"
+                                Write-Verbose "Successfully set DNS suffix search list"
+                            }
+                            catch {
+                                Write-Warning "Failed to set DNS suffix search list: $($_.Exception.Message)"
+                            }
+
+                            Write-Verbose "DNS Search List configuration completed"
+                        }
+                        else {
+                            # Display current DNS suffix search list even if we're not changing it
+                            $currentSearchList = (Get-DnsClientGlobalSetting).SuffixSearchList
+                            Write-Verbose "Current DNS suffix search list: $($currentSearchList -join ', ')"
+                            Write-Verbose "No DNS Search List provided, skipping DNS search list configuration"
+                        }
+                    }
+                    #endregion
+
                     Write-Verbose "Requesting a new AzureAD access token to be used as a bearer token (API key) for the KEYTOS EZCA API"
-                    $bearerToken = ConvertTo-SecureString -AsPlainText (Get-AzAccessToken -TenantId $TenantId -ErrorAction Stop).Token -Force
+                    $bearerToken = (Get-AzAccessToken -TenantId $TenantId -ErrorAction Stop).Token
                     Write-Verbose "Successfully retrieved a new AzureAD access token"
                     Write-Verbose $bearerToken
                     #endregion
@@ -490,7 +772,8 @@ function New-KEYTOSACMEAgentInstance {
                         if ($MyCAs.Count -eq 0) {
                             throw [System.Exception] "No CAs found"
                         }
-                    } else {
+                    }
+                    else {
                         throw [System.Exception] "Failed to retrieve the list of CAs"
                     }
 
@@ -506,13 +789,15 @@ function New-KEYTOSACMEAgentInstance {
                     if ($null -eq $CAFriendlyName) {
                         Write-Verbose "No CAFriendlyName provided, selecting the first Issuing Intermediate SSL CA"
                         $SelectedIssuingIntermediateSSLCA = $IssuingIntermediateCAs | Select-Object -First 1
-                    } else {
+                    }
+                    else {
                         Write-Verbose "Getting the Selected Issuing Intermediate SSL CA with CAFriendlyName: $($CAFriendlyName)"
                         $SelectedIssuingIntermediateSSLCA = $IssuingIntermediateCAs | Where-Object { $_.CAFriendlyName -eq $CAFriendlyName }
                     }
                     if ($SelectedIssuingIntermediateSSLCA.Count -eq 0) {
                         throw [System.Exception] "No Selected Issuing Intermediate SSL CA found"
-                    } else {
+                    }
+                    else {
                         Write-Verbose "Successfully retrieved the Selected Issuing Intermediate SSL CA:"
                         Write-Verbose "$($SelectedIssuingIntermediateSSLCA | Format-Table | Out-String)"
                     }
@@ -522,7 +807,8 @@ function New-KEYTOSACMEAgentInstance {
                     $LatestActiveSelectedIssuingIntermediateSSLCA = $SelectedIssuingIntermediateSSLCA.LocalCAs | Sort-Object -Property ExpiryDate -Descending | Select-Object -First 1
                     if ($null -eq $LatestActiveSelectedIssuingIntermediateSSLCA) {
                         throw [System.Exception] "No latest active Selected Issuing Intermediate SSL CA found"
-                    } else {
+                    }
+                    else {
                         Write-Verbose "Successfully retrieved the latest active Selected Issuing Intermediate SSL CA:"
                         Write-Verbose "$($LatestActiveSelectedIssuingIntermediateSSLCA | Format-Table | Out-String)"
                     }
@@ -569,15 +855,18 @@ function New-KEYTOSACMEAgentInstance {
                                         $DeleteACMEAgentInstance = (ConvertFrom-Json $iwrDeleteACMEAgentInstance.Content).Message
                                         Write-Verbose "Successfully deleted the existing ACME Agent instance:"
                                         Write-Verbose "$($DeleteACMEAgentInstance | Format-Table | Out-String)"
-                                    } else {
+                                    }
+                                    else {
                                         throw [System.Exception] "Failed to delete the existing ACME Agent instance: $((ConvertFrom-Json $iwrDeleteACMEAgentInstance.Content).Message)"
                                     }
-                                } else {
+                                }
+                                else {
                                     throw [System.Exception] "An ACME Agent instance with the same Certificate Subject Name already exists:`n$($ExistingACMEAgentInstance | Format-Table | Out-String)"
                                 }
                             }
                         }
-                    } else {
+                    }
+                    else {
                         throw [System.Exception] "Failed to verify there isn't an ACME Agent instance with the same Certificate Subject Name: $(ConvertFrom-Json $iwrGetACMEAgentInstances.Content)"
                     }
 
@@ -596,7 +885,8 @@ function New-KEYTOSACMEAgentInstance {
                         $MyDomains = ConvertFrom-Json (ConvertFrom-Json $iwrMyDomains.Content).Message
                         Write-Verbose "Successfully retrieved the list of domains:"
                         Write-Verbose "$($MyDomains | Format-Table | Out-String)"
-                    } else {
+                    }
+                    else {
                         throw [System.Exception]  "Failed to retrieve the list of domains: $((ConvertFrom-Json $iwrMyDomains.Content).Message)"
                     }
                     #-Verify the domain for the certificate subject name was already registered and approved
@@ -623,13 +913,16 @@ function New-KEYTOSACMEAgentInstance {
                                 $DeleteDomain = (ConvertFrom-Json $iwrDeleteDomain.Content).Message
                                 Write-Verbose "Successfully deleted the existing domain:"
                                 Write-Verbose "$($DeleteDomain | Format-Table | Out-String)"
-                            } else {
+                            }
+                            else {
                                 throw [System.Exception] "Failed to delete the existing domain: $((ConvertFrom-Json $iwrDeleteDomain.Content).Message)"
                             }
-                        } else {
+                        }
+                        else {
                             throw [System.Exception] "The domain for the certificate subject name $($CertificateSubjectName) is already registered and AutoReplace is NOT enabled"
                         }
-                    } else {
+                    }
+                    else {
                         Write-Verbose "The domain for the certificate subject name $($CertificateSubjectName) is still available"
                     }
 
@@ -659,10 +952,11 @@ function New-KEYTOSACMEAgentInstance {
                         $RegisterACMEAgentInstance = (ConvertFrom-Json $iwrRegisterACMEAgentInstance.Content).Message
                         Write-Verbose "Successfully registered the ACME Agent instance:"
                         Write-Verbose "$($RegisterACMEAgentInstance | Format-Table | Out-String)"
-                    } else {
+                    }
+                    else {
                         throw [System.Exception]  "Failed to register the ACME Agent instance: $((ConvertFrom-Json $iwrRegisterACMEAgentInstance.Content).Message)"
                     }
-                
+
                     # Verifying if we still have a valid certificate in the local machine store for the Certificate Subject Name and it has not expired using certutil
                     Write-Verbose "Verifying if we still have a valid certificate in the local machine store for the Certificate Subject Name ($CertificateSubjectName)"
                     $CertUtilCerts = "$TemporaryDirectoryPath\certutil-certs.txt"
@@ -673,7 +967,8 @@ function New-KEYTOSACMEAgentInstance {
                             $Certificate = [PSCustomObject]@{
                                 SerialNumber = ($_ -split ':')[1].Trim()
                             }
-                        } elseif ($_ -match 'NotAfter') {
+                        }
+                        elseif ($_ -match 'NotAfter') {
                             # Add the NotAfter property to the certificate object as a DateTime (example: 9/15/2025 10:49 AM)
                             $NotAferString = ($_ -split ': ')[1].Trim()
                             $NotAfter = [DateTime]::ParseExact($NotAferString, 'M/d/yyyy h:mm tt', $null)
@@ -687,7 +982,7 @@ function New-KEYTOSACMEAgentInstance {
                     if ($Certificates.Count -ne 0) {
                         Write-Verbose "Retrieved the following certificates from the local machine store"
                         Write-Verbose "$($Certificates | Format-Table | Out-String)"
-    
+
                         $ExpiredCertificates = @($Certificates | Where-Object { $_.Expired -eq $true })
                         if ($ExpiredCertificates.Count -gt 0) {
                             Write-Verbose "The following certificates are expired and will be deleted"
@@ -699,11 +994,12 @@ function New-KEYTOSACMEAgentInstance {
                                     Start-Process $CertUtilExecutablePath -ArgumentList "-delstore My `"$($_.SerialNumber)`"" -Wait -NoNewWindow -PassThru -ErrorAction Stop | Out-Null
                                     Write-Verbose "Successfully deleted the expired certificate for the Certificate Subject Name ($CertificateSubjectName)"
                                 }
-                            } else {
+                            }
+                            else {
                                 throw [System.Exception] "Expired certificates are available in the local machine store for the Certificate Subject Name ($CertificateSubjectName)"
                             }
                         }
-    
+
                         $ValidCertificates = @($Certificates | Where-Object { $_.Expired -eq $false })
                         if ($ValidCertificates.Count -gt 1) {
                             if ($AutoReplace -and $PSCmdlet.ShouldProcess("Existing Certificates for Certificate Subject Name ($CertificateSubjectName)", 'Delete')) {
@@ -713,18 +1009,21 @@ function New-KEYTOSACMEAgentInstance {
                                     Start-Process $CertUtilExecutablePath -ArgumentList "-delstore My `"$($_.SerialNumber)`"" -Wait -NoNewWindow -PassThru -ErrorAction Stop | Out-Null
                                     Write-Verbose "Successfully deleted the existing certificate for the Certificate Subject Name ($CertificateSubjectName)"
                                 }
-                            } else {
+                            }
+                            else {
                                 throw [System.Exception] "More than one valid certificate is available in the local machine store for the Certificate Subject Name ($CertificateSubjectName)"
                             }
-                        } elseif ($ValidCertificates.Count -eq 1) {
+                        }
+                        elseif ($ValidCertificates.Count -eq 1) {
                             Write-Verbose "A valid certificate is still available in the local machine store for the Certificate Subject Name ($CertificateSubjectName)"
                             Write-Verbose "$($ValidCertificates | Format-Table | Out-String)"
                             $ValidCertificate = $true
-                        } else {
+                        }
+                        else {
                             Write-Verbose "No valid certificate is available yet in the local machine store for the Certificate Subject Name ($CertificateSubjectName)"
                         }
                     }
-    
+
                     if (-not $ValidCertificate) {
                         # Create a Certificate Signing Request (CSR) for the ACME agent
                         Write-Verbose "Creating a Certificate Signing Request (CSR) input file for the ACME agent ($CertificateSubjectName)"
@@ -743,7 +1042,7 @@ Subject = "CN=$CertificateSubjectName"
 
 KeySpec = 1
 KeyLength = 4096
-Exportable = FALSE
+Exportable = TRUE
 MachineKeySet = $CertReqMachineKeySet
 SMIME = False
 PrivateKeyArchive = FALSE
@@ -776,7 +1075,7 @@ OID=1.3.6.1.5.5.7.3.1
                         Write-Verbose (Get-Content -Path $CertReqCSRPath | Out-String)
                         #- Get CSR content
                         $CertReqCSR = Get-Content -Path $CertReqCSRPath -Raw
-    
+
                         # Get the CA Templates for the latest active Selected Issuing Intermediate SSL CA
                         Write-Verbose "Getting the CA Templates for the latest active Selected Issuing Intermediate SSL CA ($($LatestActiveSelectedIssuingIntermediateSSLCA.CAID))"
                         $caID = @{
@@ -794,20 +1093,22 @@ OID=1.3.6.1.5.5.7.3.1
                             $GetCATemplates = (ConvertFrom-Json $iwrGetCATemplates.Content)
                             Write-Verbose "Successfully retrieved the CA Templates for the latest active Selected Issuing Intermediate SSL CA"
                             Write-Verbose "$($GetCATemplates | Format-Table | Out-String)"
-                        } else {
+                        }
+                        else {
                             throw [System.Exception] "Failed to retrieve the CA Templates for the latest active Selected Issuing Intermediate SSL CA: $(ConvertFrom-Json $iwrGetCATemplates.Content)"
                         }
-    
+
                         # Get the CA Template from the CA Templates of CATemplateType 'SSL Template'
                         Write-Verbose "Getting the SSL Template from the CA Templates"
                         $SSLTemplate = ($GetCATemplates | Where-Object { $_.CATemplateType -eq 'SSL Template' })
                         if ($SSLTemplate) {
                             Write-Verbose "Successfully retrieved the SSL Template from the CA Templates"
                             Write-Verbose "$($SSLTemplate | Format-Table | Out-String)"
-                        } else {
+                        }
+                        else {
                             throw [System.Exception] "Failed to retrieve the SSL Template from the CA Templates"
                         }
-    
+
                         # Submit the CSR to the latest active Selected Issuing Intermediate SSL CA
                         Write-Verbose "Submitting the CSR for signing to the latest active Selected Issuing Intermediate SSL CA"
                         $RequestSSLCertificateV2 = @{
@@ -847,10 +1148,11 @@ OID=1.3.6.1.5.5.7.3.1
                             $SSLCertificate = ConvertFrom-Json $iwrRequestSSLCertificateV2.Content
                             Write-Verbose "Successfully submitted the CSR for signing to the latest active Selected Issuing Intermediate SSL CA"
                             Write-Verbose "$($SSLCertificate | Get-Member -Name *certificate* | Format-Table | Out-String)"
-                        } else {
+                        }
+                        else {
                             throw [System.Exception] "Failed to submit the CSR to the latest active Selected Issuing Intermediate SSL CA: $(ConvertFrom-Json $iwrRequestSSLCertificateV2.Content)"
                         }
-    
+
                         # Exporting the certificate files
                         Write-Verbose "Exporting the certificate files"
                         $SSLCertificate.CertificatePEM | ForEach-Object {
@@ -868,17 +1170,17 @@ OID=1.3.6.1.5.5.7.3.1
                             Write-Verbose "Root CA certificate exported to $RootCACertificatePath"
                             Write-Verbose "$($_ | Format-Table | Out-String)"
                         }
-    
+
                         # Import the Root CA certificate to the Trusted Root Certification Authorities store using certutil
                         Write-Verbose "Importing the Root CA certificate to the Trusted Root Certification Authorities store"
                         Start-Process $CertUtilExecutablePath -ArgumentList "-addstore Root `"$RootCACertificatePath`"" -Wait
                         Write-Verbose "Successfully imported the Root CA certificate to the Trusted Root Certification Authorities store"
-    
+
                         # Import the Issuing CA certificate to the Intermediate Certification Authorities store using certutil
                         Write-Verbose "Importing the Issuing CA certificate to the Intermediate Certification Authorities store"
                         Start-Process $CertUtilExecutablePath -ArgumentList "-addstore CA `"$IssuingCACertificatePath`"" -Wait
                         Write-Verbose "Successfully imported the Issuing CA certificate to the Intermediate Certification Authorities store"
-    
+
                         # Complete the certificate request
                         Write-Verbose "Completing the certificate request and storing to the local machine store"
                         $CertReqAccept = "$TemporaryDirectoryPath\certreq-accept.txt"
@@ -886,7 +1188,8 @@ OID=1.3.6.1.5.5.7.3.1
                         $CertReqAcceptSuccess = (Get-Content -Path $CertReqAccept) -match 'Installed Certificate'
                         if ($CertReqAcceptSuccess) {
                             Write-Verbose "Successfully completed the certificate request and stored to the local machine store"
-                        } else {
+                        }
+                        else {
                             throw [System.Exception] "Failed to complete the certificate request and store to the local machine store:`n$(Get-Content -Path $CertReqAccept)"
                         }
                     }
@@ -900,15 +1203,61 @@ OID=1.3.6.1.5.5.7.3.1
                     $CertificateThumbprint
                     if ($CertificateThumbprint.Count -le 0) {
                         throw [System.Exception] "Failed to retrieve the Certificate Thumbprint from the local machine store"
-                    } elseif ($CertificateThumbprint.Count -gt 1) {
+                    }
+                    elseif ($CertificateThumbprint.Count -gt 1) {
                         Write-Error "Multiple Certificate Thumbprints found in the local machine store"
                         Write-Error ($CertificateThumbprint | Format-Table | Out-String)
                         throw [System.Exception] "Multiple Certificate Thumbprints found in the local machine store"
-                    } else {
+                    }
+                    else {
                         Write-Verbose "Successfully retrieved the Certificate Thumbprint from the local machine store"
                         Write-Verbose ($CertificateThumbprint | Format-Table | Out-String)
                     }
-    
+
+                    # Providing IIS_IUSRS group with Full Control and Read access to the private key of the certificate
+                    Write-Output "Providing IIS_IUSRS group with Full Control access to the private key of the certificate"
+                    $Certificate = Get-Item "Cert:\LocalMachine\My\$($CertificateThumbprint)"
+
+                    # Find the private key file
+                    $KeyContainerName = $Certificate.PrivateKey.CspKeyContainerInfo.UniqueKeyContainerName
+                    Write-Output "Key container name: $KeyContainerName"
+
+                    # Path to the private key file (Machine Keys)
+                    $MachineKeysPath = "$env:ALLUSERSPROFILE\Microsoft\Crypto\RSA\MachineKeys"
+                    $KeyFilePath = Get-ChildItem -Path $MachineKeysPath -Filter $KeyContainerName | Select-Object -ExpandProperty FullName
+                    Write-Output "Private key file path: $KeyFilePath"
+
+                    if ($KeyFilePath) {
+                        # Get current ACL
+                        $Acl = Get-Acl -Path $KeyFilePath
+                        Write-Output "Current ACL:"
+                        Write-Output ($Acl.Access | Format-Table IdentityReference, FileSystemRights, AccessControlType -AutoSize | Out-String)
+
+                        # Create a new access rule for IIS_IUSRS
+                        $IisIusrs = New-Object System.Security.Principal.NTAccount("IIS_IUSRS")
+                        $AccessRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+                            $IisIusrs,
+                            "FullControl",
+                            "Allow"
+                        )
+
+                        # Add the access rule to the ACL
+                        $Acl.AddAccessRule($AccessRule)
+
+                        # Apply the modified ACL to the private key file
+                        Set-Acl -Path $KeyFilePath -AclObject $Acl
+
+                        # Verify the changes
+                        $UpdatedAcl = Get-Acl -Path $KeyFilePath
+                        Write-Output "Updated ACL:"
+                        Write-Output ($UpdatedAcl.Access | Format-Table IdentityReference, FileSystemRights, AccessControlType -AutoSize | Out-String)
+                        
+                        Write-Output "Successfully provided IIS_IUSRS with Full Control to the certificate's private key"
+                    } else {
+                        Write-Error "Private key file not found for the certificate with thumbprint $($CertificateThumbprint)"
+                        throw [System.Exception] "Private key file not found for the certificate with thumbprint $($CertificateThumbprint)"
+                    }
+
                     #- Import the IIS Administration module
                     Write-Verbose "Importing the IIS Administration module"
                     Import-Module IISAdministration -ErrorAction Stop
@@ -930,11 +1279,12 @@ OID=1.3.6.1.5.5.7.3.1
                         $IISAppPool.ManagedRuntimeVersion = ''
                         Write-Verbose "Successfully created the IIS App Pool"
                         Write-Verbose ($IISAppPool | Format-Table | Out-String)
-                    } else {
+                    }
+                    else {
                         Write-Verbose "The IIS App Pool ($IISAppPoolName) already exists"
                         Write-Verbose ($IISAppPool | Format-Table | Out-String)
                     }
-    
+
                     Start-IISCommitDelay # Delay the IIS commit to prevent the IIS service from restarting multiple times
 
                     # Create the IIS site and bind the certificate to it
@@ -955,7 +1305,8 @@ OID=1.3.6.1.5.5.7.3.1
                         $IISSite = Get-IISSite -Name $IISAppName -ErrorAction Stop
                         Write-Verbose "Successfully created and bound the certificate to the IIS site"
                         Write-Verbose ($IISSite | Format-Table | Out-String)
-                    } else {
+                    }
+                    else {
                         Write-Verbose "The IIS site ($IISAppName) already exists"
                         Write-Verbose ($IISSite | Format-Table | Out-String)
                         Write-Verbose "Updating the IIS Site's web binding"
@@ -989,7 +1340,7 @@ OID=1.3.6.1.5.5.7.3.1
                     Write-Verbose "Binding the Application Pool ($IISAppPoolName) to the IIS site ($IISAppName)"
                     $IISSite.Applications["/"].ApplicationPoolName = $IISAppPoolName
                     Write-Verbose "Successfully bound the Application Pool ($IISAppPoolName) to the IIS site ($IISAppName)"
-    
+
                     # Update the appsettings.json file
                     Write-Verbose "Updating the appsettings.json file with the new ACME Agent instance details"
                     $AppSettingsFileBackup = "$IISrootDirectoryPath\appsettings.json.default" # Added as a default backup during the build stage
@@ -999,12 +1350,114 @@ OID=1.3.6.1.5.5.7.3.1
                     }
                     Copy-Item -Path $AppSettingsFileBackup -Destination $AppSettingsFile -Force
                     $webAppSettings = Get-Content -Raw -Path $AppSettingsFile
-                    $webAppSettings = $webAppSettings.Replace('$SUBJECTNAME$', $CertificateSubjectName).Replace('$AGENTURL$', $URL).Replace('$APPINSIGHTS_CONNECTION_STRING$', $AppInsightsEndpoint)
+                    $webAppSettings = $webAppSettings.Replace('$SUBJECTNAME$', $CertificateSubjectName)
+                    $webAppSettings = $webAppSettings.Replace('$AGENTURL$', $URL)
+                    $webAppSettings = $webAppSettings.Replace('$APPINSIGHTS_CONNECTION_STRING$', $AppInsightsEndpoint)
+                    $webAppSettings = $webAppSettings.Replace('portal.ezca.io', 'eu.ezca.io')
+                    # If verbose logging is enabled then set the default logging level to Trace
+                    if ($VerbosePreference -eq 'Continue') {
+                        Write-Verbose "Since verbose logging is enabled, setting the default logging level to Trace in the appsettings.json file"
+                        $loggingSection = @"
+    "LogLevel": {
+        "Default": "Trace",
+        "Microsoft": "Trace",
+        "Microsoft.AspNetCore": "Trace",
+        "Microsoft.Hosting.Lifetime": "Trace",
+        "Microsoft.EntityFrameworkCore": "Trace",
+        "Microsoft.AspNetCore.Hosting.Diagnostics": "Trace",
+        "Microsoft.AspNetCore.Routing": "Trace",
+        "Microsoft.AspNetCore.Mvc": "Trace",
+        "Microsoft.AspNetCore.Mvc.ViewFeatures": "Trace",
+        "Microsoft.AspNetCore.Mvc.ViewFeatures.Filters": "Trace",
+        "Microsoft.AspNetCore.Mvc.ViewFeatures.Infrastructure": "Trace",
+        "Microsoft.AspNetCore.Mvc.ViewFeatures.Internal": "Trace",
+        "Microsoft.AspNetCore.Mvc.ViewFeatures.ViewFeatures": "Trace",
+        "Microsoft.AspNetCore.Mvc.ViewFeatures.ViewFeatures.Filters": "Trace",
+        "Microsoft.AspNetCore.Mvc.ViewFeatures.ViewFeatures.Infrastructure": "Trace",
+        "Microsoft.AspNetCore.Mvc.ViewFeatures.ViewFeatures.Internal": "Trace",
+        "ACMEAgent": "Trace",
+        "ACMEAgent.Controllers": "Trace",
+        "ACMEAgent.Controllers.HealthController": "Trace",
+        "ACMEAgent.Controllers.ACMEController": "Trace",
+        "ACMEAgent.Services": "Trace",
+        "ACMEAgent.Models": "Trace",
+        "ACMEAgent.Data": "Trace",
+        "ACMEAgent.Data.Repositories": "Trace",
+        "ACMEAgent.Data.Repositories.Impl": "Trace",
+        "ACMEAgent.Data.Repositories.Impl.EF": "Trace",
+        "ACMEAgent.Data.Repositories.Impl.EF.Contexts": "Trace",
+        "ACMEAgent.Data.Repositories.Impl.EF.Entities": "Trace",
+        "ACMEAgent.Data.Repositories.Impl.EF.Repositories": "Trace",
+        "Microsoft.AspNetCore.Routing.EndpointMiddleware": "Trace",
+        "Microsoft.AspNetCore.Routing.RouteEndpoint": "Trace",
+        "Microsoft.AspNetCore.Routing.RouteEndpointBuilder": "Trace",
+        "Microsoft.AspNetCore.Server.Kestrel": "Trace",
+        "Microsoft.AspNetCore.Server.Kestrel.Core": "Trace",
+        "Microsoft.AspNetCore.Server.Kestrel.Connections": "Trace",
+        "Microsoft.AspNetCore.Routing.Matching.DfaMatcher": "Trace",
+        "Microsoft.AspNetCore.Routing.Matching.DfaMatcherBuilder": "Trace",
+        "Microsoft.AspNetCore.Routing.Matching.DfaNode": "Trace",
+        "Microsoft.AspNetCore.Routing.Matching.DfaNodeBuilder": "Trace",
+        "Microsoft.AspNetCore.Routing.Matching.DfaNodeFactory": "Trace",
+        "Microsoft.AspNetCore.Routing.Matching.DfaNodeFactoryBuilder": "Trace",
+        "Microsoft.AspNetCore.Routing.Matching.DfaNodeFactoryBuilder.NodeFactory": "Trace",
+        "Microsoft.AspNetCore.Routing.Matching.DfaNodeFactoryBuilder.NodeFactoryBuilder": "Trace",
+        "Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware": "Trace",
+        "Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware.EndpointSelector": "Trace",
+        "Microsoft.AspNetCore.Routing.EndpointRoutingMiddleware.EndpointSelectorBuilder": "Trace"
+    }
+"@
+                        # Replace the existing Logging section in the appsettings.json file with the new logging section
+                        $webAppSettings = $webAppSettings -replace '(?s)    "LogLevel": \{.*?\}', $loggingSection
+                        Write-Verbose "Since verbose logging is enabled, enabling stdout logging for the aspnet core application in the web.config file"
+                        $webConfigFile = "$IISrootDirectoryPath\web.config"
+                        $webConfigContent = Get-Content -Raw -Path $webConfigFile
+                        $webConfigContent = $webConfigContent.Replace('stdoutLogEnabled="false"', 'stdoutLogEnabled="true"')
+                        Set-Content -Path $webConfigFile -Value $webConfigContent
+                        # Make sure the logs directory exists and is writable for the IISUSRS group
+                        Write-Verbose "Ensuring the logs directory exists and is writable for the IISUSRS group"
+                        if (-not (Test-Path -Path "$IISrootDirectoryPath\logs")) {
+                            New-Item -Path "$IISrootDirectoryPath\logs" -ItemType Directory -Force | Out-Null
+                        }
+                        $accessRule = New-Object System.Security.AccessControl.FileSystemAccessRule("IIS_IUSRS", "FullControl", "ContainerInherit,ObjectInherit", "None", "Allow")
+                        $acl = Get-ACL "$IISrootDirectoryPath\logs"
+                        $acl.AddAccessRule($accessRule)
+                        Set-ACL -Path "$IISrootDirectoryPath\logs" -ACLObject $acl
+                    }
                     $webAppSettings | Out-File -FilePath $AppSettingsFile -Force
                     Write-Verbose "Successfully updated the appsettings.json file"
                     Write-Verbose (Get-Content -Path $AppSettingsFile | Out-String)
-    
+
                     Stop-IISCommitDelay # Commit the IIS changes
+
+                    # Add app pool identity to Cryptographic Operators group
+                    Write-Verbose "Adding the Application Pool identity ($IISAppPoolName) to the Cryptographic Operators group"
+                    # Add app pool identity to Cryptographic Operators group
+                    # Get the local group
+                    $localGroup = [ADSI]"WinNT://./Cryptographic Operators,group"
+                    # Add NETWORK SERVICE (used by many IIS app pools)
+                    try {
+                        $localGroup.Add("WinNT://NT AUTHORITY/NETWORK SERVICE")
+                        Write-Verbose "Added NETWORK SERVICE to Cryptographic Operators group"
+                    } catch {
+                        Write-Verbose "NETWORK SERVICE may already be a member or couldn't be added: $_"
+                    }
+                    # Add the specific app pool identity - note the correct format
+                    try {
+                        # The correct format uses forward slashes and no backslash
+                        $localGroup.Add("WinNT://NT AUTHORITY/IUSR")
+                        Write-Verbose "Added IUSR to Cryptographic Operators group"
+                    } catch {
+                        Write-Verbose "IUSR may already be a member or couldn't be added: $_"
+                    }
+                    try {
+                        # For application pool identity, format is different
+                        $appPoolAccount = "IIS APPPOOL/$IISAppPoolName"
+                        $localGroup.Add("WinNT://./$appPoolAccount")
+                        Write-Verbose "Added $appPoolAccount to Cryptographic Operators group"
+                    } catch {
+                        Write-Verbose "App pool identity may already be a member or couldn't be added: $_"
+                    }
 
                     # Make sure the Application Pool is recycled to avoid temporary connection issues
                     Write-Verbose "Verifying if we need to recycle the application pool ($IISAppPoolName)"
@@ -1015,30 +1468,32 @@ OID=1.3.6.1.5.5.7.3.1
                         Write-Verbose "Recycling the application pool ($IISAppPoolName)"
                         $IISAppPool.Recycle() | Out-Null
                         Write-Verbose "Sucessfully recycled the application pool"
-                    } 
+                    }
                     # else {
                     #     Write-Verbose "The application pool ($IISAppPoolName) was not started yet, we don't need to recycle it but will start it"
                     #     (Get-IISAppPool -Name $IISAppPoolName -ErrorAction Stop -Debug:$false).Start()
                     #     # $IISAppPool.Start() | Out-Null
-                    #     Write-Verbose "Sucessfully started the application pool"    
+                    #     Write-Verbose "Sucessfully started the application pool"
                     # }
                     Write-Verbose "IIS Application Pool details (AFTER):"
                     $IISAppPool = Get-IISAppPool -Name $IISAppPoolName -ErrorAction Stop -Debug:$false
                     Write-Verbose "$($IISAppPool | Format-Table | Out-String)"
-                    
+
                     # Prewarm the application pool
                     Write-Verbose "Prewarming the application pool ($IISAppPoolName)"
                     try {
                         Invoke-WebRequest -Method GET `
-                        -Uri "https://localhost/api/Health/Overall" `
-                        -ContentType 'application/json' `
-                        -Headers @{ Host = $CertificateSubjectName } `
-                        -UseBasicParsing `
-                        -ErrorAction SilentlyContinue | Out-Null
-                    } catch {
+                            -Uri "https://localhost/api/Health/Overall" `
+                            -ContentType 'application/json' `
+                            -Headers @{ Host = $CertificateSubjectName } `
+                            -UseBasicParsing `
+                            -ErrorAction SilentlyContinue | Out-Null
+                    }
+                    catch {
                         Write-Verbose "Prewarming the application pool failed, sleeping for 5 seconds..."
                         Start-Sleep -Seconds 5 # Wait for 5 seconds to allow the application pool to warm up
-                    } finally {
+                    }
+                    finally {
                         Write-Verbose "Tried to prewarm the application pool ($IISAppPoolName)"
                     }
 
@@ -1050,7 +1505,7 @@ OID=1.3.6.1.5.5.7.3.1
             if ($Stages -contains 'Cleanup') {
                 if ($PSCmdlet.ShouldProcess("Cleanup", 'Invoke')) {
                     Write-Verbose "### Cleanup Stage ###"
- 
+
                     # Clean up temporary files
                     Write-Verbose "Cleaning up temporary files"
                     Remove-Item -Path $TemporaryDirectoryPath\* -Force -ErrorAction SilentlyContinue
@@ -1063,7 +1518,7 @@ OID=1.3.6.1.5.5.7.3.1
             if ($Stages -contains 'HealthCheck') {
                 if ($PSCmdlet.ShouldProcess("Health Check", 'Test')) {
                     Write-Verbose "### Health Check Stage ###"
-    
+
                     # Verify the connection to the ACME Agent's health endpoint
                     Write-Verbose "Verifying the connection to the ACME Agent's health endpoint"
                     $iwrHealthCheck = Invoke-WebRequest -Method GET `
@@ -1074,7 +1529,8 @@ OID=1.3.6.1.5.5.7.3.1
                     if ($iwrHealthCheck.StatusCode -eq 200) {
                         Write-Verbose "Successfully verified the connection to the ACME Agent's health endpoint"
                         Write-Verbose "$($iwrHealthCheck.Content | ConvertFrom-Json | Format-Table | Out-String)"
-                    } else {
+                    }
+                    else {
                         throw [System.Exception] "Failed to verify the connection to the ACME Agent's health endpoint: $($iwrHealthCheck.StatusCode) - $($iwrHealthCheck.Content)"
                     }
                 }
@@ -1088,7 +1544,8 @@ OID=1.3.6.1.5.5.7.3.1
                     Write-Verbose "Starting the Service Monitor executable"
                     try {
                         Start-Process -FilePath $ServiceMonitorExecutablePath -ArgumentList 'w3svc', $IISAppPoolName -NoNewWindow -PassThru -Wait -ErrorAction Stop
-                    } catch {
+                    }
+                    catch {
                         throw [System.Exception] "Failed to start the Service Monitor executable: $($_.Exception.Message)"
                     }
                 }

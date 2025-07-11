@@ -1,0 +1,2 @@
+# Ignore our custom gitignore folder
+/gitignore/**
